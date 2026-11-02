@@ -3,41 +3,45 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { EmptyState, StatCard } from "@/components/common"
 import { ItemRow } from "@/components/ItemRow"
-import { formatMoney, formatPercent } from "@/lib/calc"
+import { formatMoney, formatPercent, monthLabel } from "@/lib/calc"
 
 const PRESETS = [
-  "Restos & sorties",
-  "Vacances",
-  "Cadeaux",
-  "Week-ends",
-  "Culture & cinéma",
-  "Déco maison",
+  { label: "Resto", category: "Restos" },
+  { label: "Week-end", category: "Voyages" },
+  { label: "Cadeau", category: "Cadeaux" },
+  { label: "Concert", category: "Sorties" },
+  { label: "Cinéma", category: "Culture" },
+  { label: "Déco maison", category: "Logement" },
 ]
 
-export function PleasureTab({ data, result, onAdd, onUpdate, onRemove }) {
+export function PleasureTab({ data, result, month, openId, onAdd, onUpdate, onRemove }) {
   const s = data.settings
   const jointName = s.jointAccountName || "Compte joint"
+  const items = data.budgets.filter((b) => b.month === month)
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold">Budget plaisirs communs</h2>
+          <h2 className="text-sm font-semibold">
+            Plaisirs communs · {monthLabel(month, s.locale)}
+          </h2>
           <p className="text-xs text-muted-foreground">
-            Des enveloppes que vous alimentez chaque mois, partagées comme les charges.
+            Des dépenses communes qui ne comptent que pour ce mois. Ce qui revient chaque mois va
+            dans les charges.
           </p>
         </div>
-        <Button size="sm" onClick={() => onAdd()}>
+        <Button size="sm" onClick={() => onAdd({ month })}>
           <Plus />
-          Ajouter une enveloppe
+          Ajouter une dépense
         </Button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard
-          label="Total des enveloppes"
+          label="Total des plaisirs"
           value={formatMoney(result.pleasureTotal, s)}
-          hint="par mois"
+          hint="ce mois-ci"
           icon={HeartHandshake}
           tone="primary"
         />
@@ -61,17 +65,22 @@ export function PleasureTab({ data, result, onAdd, onUpdate, onRemove }) {
         />
       </div>
 
-      {data.budgets.length === 0 ? (
+      {items.length === 0 ? (
         <EmptyState
           icon={HeartHandshake}
-          title="Pas encore d'enveloppe plaisir"
-          description="Choisissez une enveloppe de départ, l'argent sera envoyé sur le compte joint comme le reste."
+          title="Pas encore de plaisir ce mois-ci"
+          description="Un resto, un week-end, un cadeau commun : ça compte seulement pour ce mois."
           action={
             <div className="flex flex-wrap justify-center gap-2">
-              {PRESETS.map((label) => (
-                <Button key={label} size="sm" variant="outline" onClick={() => onAdd({ label })}>
+              {PRESETS.map((p) => (
+                <Button
+                  key={p.label}
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onAdd({ label: p.label, category: p.category, month })}
+                >
                   <Sparkles />
-                  {label}
+                  {p.label}
                 </Button>
               ))}
             </div>
@@ -79,13 +88,13 @@ export function PleasureTab({ data, result, onAdd, onUpdate, onRemove }) {
         />
       ) : (
         <div className="flex flex-col gap-2.5">
-          {data.budgets.map((budget) => (
+          {items.map((budget) => (
             <ItemRow
               key={budget.id}
               item={budget}
+              defaultOpen={budget.id === openId}
               people={data.people}
               settings={s}
-              showCategory={false}
               computed={result.items.find((i) => i.id === budget.id)}
               onUpdate={(patch) => onUpdate(budget.id, patch)}
               onRemove={() => onRemove(budget.id)}
@@ -97,12 +106,12 @@ export function PleasureTab({ data, result, onAdd, onUpdate, onRemove }) {
       <Card>
         <CardHeader>
           <CardTitle>Comment ça marche</CardTitle>
-          <CardDescription>Une enveloppe se comporte comme une charge commune.</CardDescription>
+          <CardDescription>Un plaisir se partage comme une charge, mais pour un seul mois.</CardDescription>
         </CardHeader>
         <CardContent className="text-xs leading-relaxed text-muted-foreground">
-          <p>enveloppe du mois → ajoutée au total commun</p>
-          <p>total commun → partagé selon la règle de la ligne</p>
-          <p>part de chacun → virement vers le {jointName.toLowerCase()}</p>
+          <p>plaisir créé en novembre → compté en novembre seulement</p>
+          <p>payé par le {jointName.toLowerCase()} → ajouté au virement vers le {jointName.toLowerCase()}</p>
+          <p>avancé par l'un de vous → l'autre lui rembourse sa part</p>
         </CardContent>
       </Card>
     </div>

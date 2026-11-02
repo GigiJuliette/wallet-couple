@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { clearData, defaultData, loadData, normalizeData, saveData, uid } from "@/lib/storage"
 import { compute, currentMonthKey } from "@/lib/calc"
 
-export function useWallet() {
+export function useWallet(month) {
   const [data, setData] = useState(() => loadData())
+  const [lastAdded, setLastAdded] = useState(null)
 
   useEffect(() => {
     saveData(data)
@@ -56,13 +57,15 @@ export function useWallet() {
           fix(d.charges)
           fix(d.budgets)
           d.personal = d.personal.filter((i) => i.owner !== id)
+          d.debts = d.debts.filter((x) => x.from !== id && x.to !== id)
           return d
         }),
 
-      addCharge: (preset = {}) =>
+      addCharge: (preset = {}) => {
+        const id = uid("c")
         update((d) => {
           d.charges.unshift({
-            id: uid("c"),
+            id,
             label: "Nouvelle charge",
             amount: 0,
             frequency: "monthly",
@@ -75,7 +78,9 @@ export function useWallet() {
             ...preset,
           })
           return d
-        }),
+        })
+        setLastAdded(id)
+      },
 
       updateCharge: (id, patch) =>
         update((d) => {
@@ -90,23 +95,29 @@ export function useWallet() {
           return d
         }),
 
-      duplicateCharge: (id) =>
+      duplicateCharge: (id) => {
+        const copyId = uid("c")
         update((d) => {
           const i = d.charges.findIndex((c) => c.id === id)
           if (i >= 0) {
             const copy = structuredClone(d.charges[i])
-            copy.id = uid("c")
+            copy.id = copyId
             copy.label = `${copy.label} (copie)`
             d.charges.splice(i + 1, 0, copy)
           }
           return d
-        }),
+        })
+        setLastAdded(copyId)
+      },
 
-      addBudget: (preset = {}) =>
+      addBudget: (preset = {}) => {
+        const id = uid("b")
         update((d) => {
           d.budgets.unshift({
-            id: uid("b"),
-            label: "Nouvelle enveloppe",
+            id,
+            label: "Nouvelle dépense",
+            month: currentMonthKey(),
+            category: "Autre",
             amount: 0,
             frequency: "monthly",
             payer: "joint",
@@ -117,7 +128,9 @@ export function useWallet() {
             ...preset,
           })
           return d
-        }),
+        })
+        setLastAdded(id)
+      },
 
       updateBudget: (id, patch) =>
         update((d) => {
@@ -132,21 +145,25 @@ export function useWallet() {
           return d
         }),
 
-      addPersonal: (preset = {}) =>
+      addPersonal: (preset = {}) => {
+        const id = uid("x")
         update((d) => {
           d.personal.unshift({
-            id: uid("x"),
+            id,
             label: "Nouvelle charge perso",
             amount: 0,
             frequency: "monthly",
             owner: preset.owner || d.people[0]?.id,
             category: "Autre",
             note: "",
+            deduct: false,
             active: true,
             ...preset,
           })
           return d
-        }),
+        })
+        setLastAdded(id)
+      },
 
       updatePersonal: (id, patch) =>
         update((d) => {
@@ -161,15 +178,46 @@ export function useWallet() {
           return d
         }),
 
-      duplicatePersonal: (id) =>
+      duplicatePersonal: (id) => {
+        const copyId = uid("x")
         update((d) => {
           const i = d.personal.findIndex((x) => x.id === id)
           if (i >= 0) {
             const copy = structuredClone(d.personal[i])
-            copy.id = uid("x")
+            copy.id = copyId
             copy.label = `${copy.label} (copie)`
             d.personal.splice(i + 1, 0, copy)
           }
+          return d
+        })
+        setLastAdded(copyId)
+      },
+
+      addDebt: (preset = {}) =>
+        update((d) => {
+          const [first, second] = d.people
+          d.debts.push({
+            id: uid("d"),
+            month: currentMonthKey(),
+            from: first?.id,
+            to: second?.id,
+            amount: 0,
+            label: "",
+            ...preset,
+          })
+          return d
+        }),
+
+      updateDebt: (id, patch) =>
+        update((d) => {
+          const x = d.debts.find((e) => e.id === id)
+          if (x) Object.assign(x, patch)
+          return d
+        }),
+
+      removeDebt: (id) =>
+        update((d) => {
+          d.debts = d.debts.filter((e) => e.id !== id)
           return d
         }),
 
@@ -220,7 +268,7 @@ export function useWallet() {
       archiveMonth: (month) =>
         update((d) => {
           const key = month || currentMonthKey()
-          const result = compute(d)
+          const result = compute(d, key)
           const entry = {
             id: uid("h"),
             month: key,
@@ -255,6 +303,7 @@ export function useWallet() {
               charges: d.charges,
               budgets: d.budgets,
               personal: d.personal,
+              debts: d.debts.filter((x) => x.month === key),
               settings: d.settings,
             },
           }
@@ -274,11 +323,19 @@ export function useWallet() {
           if (entry?.snapshot) {
             d.people = structuredClone(entry.snapshot.people || d.people)
             d.charges = structuredClone(entry.snapshot.charges || [])
-            d.budgets = structuredClone(entry.snapshot.budgets || [])
+            d.budgets = structuredClone(entry.snapshot.budgets || []).map((b) =>
+              b.month ? b : { ...b, month: entry.month }
+            )
             d.personal = structuredClone(entry.snapshot.personal || [])
+            if (entry.snapshot.debts) {
+              const restored = structuredClone(entry.snapshot.debts)
+              d.debts = [...d.debts.filter((x) => x.month !== entry.month), ...restored]
+            }
           }
           return d
         }),
+
+      clearLastAdded: () => setLastAdded(null),
 
       replaceAll: (next) => setData(normalizeData(next)),
 
@@ -290,7 +347,7 @@ export function useWallet() {
     [update]
   )
 
-  const result = useMemo(() => compute(data), [data])
+  const result = useMemo(() => compute(data, month), [data, month])
 
-  return { data, result, ...api }
+  return { data, result, lastAdded, ...api }
 }

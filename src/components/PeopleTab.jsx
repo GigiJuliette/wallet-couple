@@ -5,9 +5,20 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Field, MoneyInput, SharesBar } from "@/components/common"
+import { ItemRow } from "@/components/ItemRow"
 import { PERSON_COLORS, formatMoney, formatPercent } from "@/lib/calc"
 
-export function PeopleTab({ data, result, onAdd, onUpdate, onRemove }) {
+export function PeopleTab({
+  data,
+  result,
+  openId,
+  onAdd,
+  onUpdate,
+  onRemove,
+  onAddPersonal,
+  onUpdatePersonal,
+  onRemovePersonal,
+}) {
   const s = data.settings
   return (
     <div className="flex flex-col gap-4">
@@ -28,6 +39,7 @@ export function PeopleTab({ data, result, onAdd, onUpdate, onRemove }) {
         {data.people.map((person, index) => {
           const computed = result.people.find((p) => p.id === person.id)
           const color = person.color || PERSON_COLORS[index % PERSON_COLORS.length]
+          const deductLines = data.personal.filter((i) => i.owner === person.id && i.deduct)
           return (
             <Card key={person.id}>
               <CardHeader>
@@ -52,7 +64,7 @@ export function PeopleTab({ data, result, onAdd, onUpdate, onRemove }) {
                   </div>
                 </div>
                 <CardDescription>
-                  Total pris en compte : {formatMoney(computed?.income || 0, s)}
+                  Total pris en compte : {formatMoney(computed?.prorataBase || 0, s)}
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2">
@@ -97,6 +109,40 @@ export function PeopleTab({ data, result, onAdd, onUpdate, onRemove }) {
                     ))}
                   </div>
                 </Field>
+                <div className="flex flex-col gap-2.5 sm:col-span-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-medium">À retirer du calcul</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {deductLines.length
+                          ? `${formatMoney(computed?.deduction || 0, s)} par mois, aussi visibles dans Perso`
+                          : "un prêt, un crédit… payé chaque mois"}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        onAddPersonal({ owner: person.id, deduct: true, label: "Prêt", category: "Crédit" })
+                      }
+                    >
+                      <Plus />
+                      Ajouter
+                    </Button>
+                  </div>
+                  {deductLines.map((item) => (
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      defaultOpen={item.id === openId}
+                      people={data.people}
+                      settings={s}
+                      variant="personal"
+                      onUpdate={(patch) => onUpdatePersonal(item.id, patch)}
+                      onRemove={() => onRemovePersonal(item.id)}
+                    />
+                  ))}
+                </div>
               </CardContent>
             </Card>
           )
@@ -118,7 +164,7 @@ export function PeopleTab({ data, result, onAdd, onUpdate, onRemove }) {
             people={result.people.map((p) => ({
               id: p.id,
               name: p.name,
-              value: p.income,
+              value: p.prorataBase,
               color: p.color,
             }))}
           />
@@ -131,14 +177,14 @@ export function PeopleTab({ data, result, onAdd, onUpdate, onRemove }) {
                 />
                 <span className="font-medium">{p.name}</span>
                 <span className="text-muted-foreground tabular-nums">
-                  {formatPercent(p.incomeShare)} des revenus
+                  {formatPercent(p.incomeShare)} du calcul
                 </span>
               </span>
             ))}
           </div>
           <Separator />
           <div className="text-xs leading-relaxed text-muted-foreground">
-            <p>salaire net + autres revenus = revenu pris en compte</p>
+            <p>salaire net + autres revenus − lignes à retirer = revenu pris en compte</p>
             <p>revenu de la personne ÷ revenus du foyer = son pourcentage</p>
             <p>son pourcentage × total du commun = ce qu'elle doit mettre</p>
           </div>

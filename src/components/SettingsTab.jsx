@@ -152,7 +152,7 @@ export function SettingsTab({ data, onSetSetting, onReset, onImport }) {
                 <DialogHeader>
                   <DialogTitle>Effacer toutes les données ?</DialogTitle>
                   <DialogDescription>
-                    Revenus, charges, enveloppes et historique seront supprimés. Pensez à exporter
+                    Revenus, charges, plaisirs et historique seront supprimés. Pensez à exporter
                     avant si vous voulez garder une copie.
                   </DialogDescription>
                 </DialogHeader>

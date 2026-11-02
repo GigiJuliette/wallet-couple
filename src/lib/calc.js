@@ -15,24 +15,6 @@ export const SPLIT_MODES = [
   { value: "custom", label: "Pourcentages manuels" },
 ]
 
-export const CATEGORIES = [
-  "Logement",
-  "Énergie",
-  "Télécom",
-  "Assurances",
-  "Courses",
-  "Transport",
-  "Abonnements",
-  "Sport & loisirs",
-  "Santé",
-  "Animaux",
-  "Enfants",
-  "Impôts",
-  "Épargne",
-  "Crédit",
-  "Autre",
-]
-
 export const PERSON_COLORS = [
   "oklch(0.60 0.216 350)",
   "oklch(0.60 0.17 300)",
@@ -89,7 +71,7 @@ export function sharedItemsOf(data) {
   const budgets = (data.budgets || []).map((b) => ({
     ...b,
     kind: "pleasure",
-    frequency: b.frequency || "monthly",
+    frequency: "monthly",
     payer: b.payer || JOINT,
   }))
   return [...charges, ...budgets]
@@ -138,20 +120,32 @@ function cmp(a, b) {
   return String(a ?? "").localeCompare(String(b ?? ""))
 }
 
-export function compute(data) {
+export function compute(data, month = currentMonthKey()) {
   const people = data.people || []
   const ids = people.map((p) => p.id)
   const byId = Object.fromEntries(people.map((p) => [p.id, p]))
   const settings = data.settings || {}
   const nameOf = (id) => byId[id]?.name || "?"
 
+  const personal = (data.personal || [])
+    .filter((i) => i.active !== false)
+    .map((i) => ({
+      ...i,
+      owner: ids.includes(i.owner) ? i.owner : ids[0],
+      monthly: toMonthly(i.amount, i.frequency),
+    }))
+
   const incomes = Object.fromEntries(people.map((p) => [p.id, incomeOf(p)]))
+  const deductions = zero(ids)
+  for (const item of personal) if (item.deduct) deductions[item.owner] += item.monthly
+  const bases = Object.fromEntries(ids.map((id) => [id, Math.max(0, incomes[id] - deductions[id])]))
   const totalIncome = ids.reduce((s, id) => s + incomes[id], 0)
-  const prorata = normalizeWeights(incomes, ids)
+  const totalBase = ids.reduce((s, id) => s + bases[id], 0)
+  const prorata = normalizeWeights(bases, ids)
   const equal = normalizeWeights(Object.fromEntries(ids.map((id) => [id, 1])), ids)
 
   const items = sharedItemsOf(data)
-    .filter((i) => i.active !== false)
+    .filter((i) => i.active !== false && (!i.month || i.month === month))
     .map((i) => {
       const monthly = toMonthly(i.amount, i.frequency)
       const mode = i.split && i.split !== "inherit" ? i.split : settings.defaultSplit || "prorata"
@@ -162,14 +156,6 @@ export function compute(data) {
       const payer = ids.includes(i.payer) ? i.payer : JOINT
       return { ...i, payer, monthly, mode, weights }
     })
-
-  const personal = (data.personal || [])
-    .filter((i) => i.active !== false)
-    .map((i) => ({
-      ...i,
-      owner: ids.includes(i.owner) ? i.owner : ids[0],
-      monthly: toMonthly(i.amount, i.frequency),
-    }))
 
   const due = zero(ids)
   const paidDirect = zero(ids)
@@ -211,6 +197,27 @@ export function compute(data) {
   }
 
   for (const item of personal) personalTotal[item.owner] += item.monthly
+
+  const debts = (data.debts || []).filter(
+    (d) =>
+      d.month === month &&
+      ids.includes(d.from) &&
+      ids.includes(d.to) &&
+      d.from !== d.to &&
+      num(d.amount) > 0
+  )
+  for (const d of debts) {
+    const amount = num(d.amount)
+    owes[d.from][d.to] += amount
+    owesLines[d.from][d.to].push({
+      id: d.id,
+      label: d.label,
+      kind: "debt",
+      monthly: round2(amount),
+      share: round2(amount),
+      weight: 1,
+    })
+  }
 
   const poolTotal = chargesTotal + pleasureTotal
   const jointContribution = distribute(round2(jointTotal), ids, shareOfJoint2weights(shareOfJoint, ids))
@@ -288,7 +295,9 @@ export function compute(data) {
       index,
       color: p.color || PERSON_COLORS[index % PERSON_COLORS.length],
       income,
-      incomeShare: totalIncome > 0 ? income / totalIncome : prorata[p.id] || 0,
+      deduction: round2(deductions[p.id]),
+      prorataBase: round2(bases[p.id]),
+      incomeShare: totalBase > 0 ? bases[p.id] / totalBase : prorata[p.id] || 0,
       due: dueValue,
       paidDirect: round2(paidDirect[p.id]),
       balance: round2(due[p.id] - paidDirect[p.id]),
@@ -309,6 +318,7 @@ export function compute(data) {
     people: perPerson,
     items,
     personal,
+    debts,
     savings: computeSavings(data),
     totalIncome: round2(totalIncome),
     chargesTotal: round2(chargesTotal),
@@ -369,4 +379,45 @@ export function monthLabel(key, locale = "fr-FR") {
 
 export function currentMonthKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+}
+
+export function categoryBreakdown(result, view) {
+  const rows = new Map()
+  const add = (category, commun, perso) => {
+    const key = category || "Autre"
+    const row = rows.get(key) || { category: key, commun: 0, perso: 0 }
+    row.commun += commun
+    row.perso += perso
+    rows.set(key, row)
+  }
+
+  const person = result.people.find((p) => p.id === view)
+  for (const item of result.items) {
+    const amount = person ? item.monthly * (item.weights[person.id] || 0) : item.monthly
+    if (amount > 0.005) add(item.category, amount, 0)
+  }
+  if (view !== "commun") {
+    for (const item of result.personal) {
+      if (person && item.owner !== person.id) continue
+      if (item.monthly > 0.005) add(item.category, 0, item.monthly)
+    }
+  }
+
+  const list = [...rows.values()]
+    .map((r) => ({
+      ...r,
+      commun: round2(r.commun),
+      perso: round2(r.perso),
+      total: round2(r.commun + r.perso),
+    }))
+    .sort((a, b) => b.total - a.total)
+  const total = round2(list.reduce((s, r) => s + r.total, 0))
+  const income = person ? person.income : result.totalIncome
+  return {
+    rows: list.map((r) => ({ ...r, share: total > 0 ? r.total / total : 0 })),
+    total,
+    commun: round2(list.reduce((s, r) => s + r.commun, 0)),
+    perso: round2(list.reduce((s, r) => s + r.perso, 0)),
+    income,
+  }
 }

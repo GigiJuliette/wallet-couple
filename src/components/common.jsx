@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { FREQUENCIES, JOINT, SPLIT_MODES, currencySymbol, num } from "@/lib/calc"
+import { categoryColor, categoryOf } from "@/lib/categories"
 
 export function StatCard({ label, value, hint, icon: Icon, tone = "default", className }) {
   const tones = {
@@ -178,5 +179,37 @@ export function SharesBar({ people, className }) {
         />
       ))}
     </div>
+  )
+}
+
+export function CategoryBadge({ name, className }) {
+  const def = categoryOf(name)
+  const Icon = def.icon
+  const color = categoryColor(def.name)
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-foreground",
+        className
+      )}
+      style={{ background: `color-mix(in oklch, ${color} 18%, transparent)` }}
+    >
+      <Icon className="size-3.5 shrink-0" style={{ color }} />
+      {def.name}
+    </span>
+  )
+}
+
+export function CategoryIcon({ name, className }) {
+  const def = categoryOf(name)
+  const Icon = def.icon
+  const color = categoryColor(def.name)
+  return (
+    <span
+      className={cn("flex size-7 shrink-0 items-center justify-center rounded-md", className)}
+      style={{ background: `color-mix(in oklch, ${color} 18%, transparent)` }}
+    >
+      <Icon className="size-3.5" style={{ color }} />
+    </span>
   )
 }

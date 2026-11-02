@@ -1,6 +1,9 @@
 import {
   ArrowRight,
   Banknote,
+  HandCoins,
+  Plus,
+  Trash2,
   HeartHandshake,
   Landmark,
   PiggyBank,
@@ -17,10 +20,29 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
-import { EmptyState, StatCard } from "@/components/common"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { EmptyState, MoneyInput, StatCard } from "@/components/common"
 import { formatMoney, formatPercent, monthLabel } from "@/lib/calc"
 
-export function Dashboard({ data, result, month, onArchive, onGoTo, onToggleTransfer, onClearMonth }) {
+export function Dashboard({
+  data,
+  result,
+  month,
+  onArchive,
+  onGoTo,
+  onToggleTransfer,
+  onClearMonth,
+  onAddDebt,
+  onUpdateDebt,
+  onRemoveDebt,
+}) {
   const s = data.settings
   const money = (v) => formatMoney(v, s)
   const hasPool = result.poolTotal > 0
@@ -50,7 +72,7 @@ export function Dashboard({ data, result, month, onArchive, onGoTo, onToggleTran
         <StatCard
           label="Plaisirs communs"
           value={money(result.pleasureTotal)}
-          hint="enveloppes du mois"
+          hint="dépenses du mois"
           icon={HeartHandshake}
         />
         <StatCard
@@ -104,11 +126,11 @@ export function Dashboard({ data, result, month, onArchive, onGoTo, onToggleTran
           </div>
         </CardHeader>
         <CardContent className="pt-4">
-          {!hasPool ? (
+          {!hasPool && result.transfers.length === 0 ? (
             <EmptyState
               icon={Receipt}
               title="Rien à répartir pour le moment"
-              description="Ajoutez vos charges communes et vos enveloppes plaisir, le calcul se fait tout seul."
+              description="Ajoutez vos charges communes et vos plaisirs du mois, le calcul se fait tout seul."
               action={
                 <Button size="sm" onClick={() => onGoTo("charges")}>
                   Ajouter une charge
@@ -159,7 +181,7 @@ export function Dashboard({ data, result, month, onArchive, onGoTo, onToggleTran
               {peerTransfers.length ? (
                 <div className="flex flex-col gap-2">
                   <p className="text-xs font-medium text-muted-foreground">
-                    Entre vous, pour les charges avancées sur un compte perso
+                    Entre vous : charges avancées sur un compte perso et remboursements ponctuels
                   </p>
                   {peerTransfers.map((t) => (
                     <TransferLine
@@ -177,6 +199,14 @@ export function Dashboard({ data, result, month, onArchive, onGoTo, onToggleTran
           )}
         </CardContent>
       </Card>
+
+      <DebtsCard
+        data={data}
+        month={month}
+        onAdd={onAddDebt}
+        onUpdate={onUpdateDebt}
+        onRemove={onRemoveDebt}
+      />
 
       <div className="grid gap-3 lg:grid-cols-2">
         {result.people.map((p) => (
@@ -204,6 +234,90 @@ export function Dashboard({ data, result, month, onArchive, onGoTo, onToggleTran
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function DebtsCard({ data, month, onAdd, onUpdate, onRemove }) {
+  const s = data.settings
+  const debts = data.debts.filter((d) => d.month === month)
+  const canAdd = data.people.length >= 2
+  const personSelect = (value, onChange) => (
+    <Select value={value || ""} onValueChange={onChange}>
+      <SelectTrigger>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {data.people.map((p) => (
+          <SelectItem key={p.id} value={p.id}>
+            {p.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <HandCoins className="size-4 text-primary" />
+              Remboursements ponctuels
+            </CardTitle>
+            <CardDescription>
+              {monthLabel(month, s.locale)} · une somme due à l'autre pour ce mois seulement,
+              ajoutée au virement entre vous.
+            </CardDescription>
+          </div>
+          <Button size="sm" variant="outline" disabled={!canAdd} onClick={() => onAdd({ month })}>
+            <Plus />
+            Ajouter
+          </Button>
+        </div>
+      </CardHeader>
+      {debts.length ? (
+        <CardContent className="flex flex-col gap-2.5">
+          {debts.map((d) => (
+            <div
+              key={d.id}
+              className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1fr_auto_1fr_2fr_8rem_auto]"
+            >
+              {personSelect(d.from, (v) => onUpdate(d.id, { from: v }))}
+              <span className="text-xs text-muted-foreground">doit à</span>
+              {personSelect(d.to, (v) => onUpdate(d.id, { to: v }))}
+              <Input
+                value={d.label}
+                onChange={(e) => onUpdate(d.id, { label: e.target.value })}
+                placeholder="Pour quoi ?"
+                className="col-span-3 sm:col-span-1"
+              />
+              <div className="col-span-2 sm:col-span-1">
+                <MoneyInput
+                  value={d.amount}
+                  currency={s.currency}
+                  onChange={(v) => onUpdate(d.id, { amount: v })}
+                />
+              </div>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                className="justify-self-end text-muted-foreground hover:text-destructive"
+                onClick={() => onRemove(d.id)}
+                aria-label="Supprimer"
+              >
+                <Trash2 />
+              </Button>
+              {d.from === d.to ? (
+                <p className="col-span-full text-[11px] text-destructive">
+                  Choisis deux personnes différentes.
+                </p>
+              ) : null}
+            </div>
+          ))}
+        </CardContent>
+      ) : null}
+    </Card>
   )
 }
 
@@ -277,7 +391,7 @@ function PersonSummary({ person: p, settings, jointName }) {
             <span className="size-2.5 rounded-full" style={{ background: p.color }} />
             {p.name}
           </CardTitle>
-          <Badge variant="outline">{formatPercent(p.incomeShare)} des revenus</Badge>
+          <Badge variant="outline">{formatPercent(p.incomeShare)} du calcul</Badge>
         </div>
         <CardDescription>{money(p.income)} net par mois</CardDescription>
       </CardHeader>

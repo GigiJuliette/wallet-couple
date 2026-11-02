@@ -14,7 +14,8 @@ npm run dev
 1. Vous entrez vos revenus nets (+ autres revenus éventuels).
 2. Vous listez les charges communes, en précisant **sur quel compte elles sont prélevées**
    (compte joint ou compte perso de l'un de vous).
-3. Vous ajoutez des enveloppes « plaisirs communs » (restos, vacances…).
+3. Vous ajoutez les plaisirs communs du mois (un resto, un week-end…). Ils ne comptent que
+   pour le mois où ils sont créés. Ce qui revient chaque mois est une charge.
 4. L'app calcule le pourcentage de chacun et affiche **les virements du début de mois**.
    Chaque virement se coche quand il est fait, avec la date.
 5. Les charges perso (sport, téléphone, crédit) se listent à part : pas partagées, mais

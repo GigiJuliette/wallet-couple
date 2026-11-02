@@ -1,5 +1,6 @@
 import * as React from "react";
 import {
+  BarChart3,
   ChevronLeft,
   ChevronRight,
   HeartHandshake,
@@ -25,6 +26,7 @@ import { PersonalTab } from "@/components/PersonalTab";
 import { SavingsTab } from "@/components/SavingsTab";
 import { HistoryTab } from "@/components/HistoryTab";
 import { SettingsTab } from "@/components/SettingsTab";
+import { StatsTab } from "@/components/StatsTab";
 import { useWallet } from "@/hooks/useWallet";
 import { currentMonthKey, monthLabel } from "@/lib/calc";
 
@@ -35,10 +37,11 @@ function shiftMonth(key, delta) {
 }
 
 export default function App() {
-  const wallet = useWallet();
+  const [month, setMonth] = React.useState(() => currentMonthKey());
+  const wallet = useWallet(month);
   const { data, result } = wallet;
   const [tab, setTab] = React.useState("dashboard");
-  const [month, setMonth] = React.useState(() => currentMonthKey());
+  const pleasureCount = data.budgets.filter((b) => b.month === month).length;
 
   const dark = data.settings.theme === "dark";
 
@@ -64,7 +67,10 @@ export default function App() {
               <Button
                 size="icon-sm"
                 variant="ghost"
-                onClick={() => setMonth((m) => shiftMonth(m, -1))}
+                onClick={() => {
+                  wallet.clearLastAdded();
+                  setMonth((m) => shiftMonth(m, -1));
+                }}
                 aria-label="Mois précédent"
               >
                 <ChevronLeft />
@@ -75,7 +81,10 @@ export default function App() {
               <Button
                 size="icon-sm"
                 variant="ghost"
-                onClick={() => setMonth((m) => shiftMonth(m, 1))}
+                onClick={() => {
+                  wallet.clearLastAdded();
+                  setMonth((m) => shiftMonth(m, 1));
+                }}
                 aria-label="Mois suivant"
               >
                 <ChevronRight />
@@ -98,13 +107,20 @@ export default function App() {
       <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-7">
         <Tabs
           value={tab}
-          onValueChange={setTab}
+          onValueChange={(v) => {
+            wallet.clearLastAdded();
+            setTab(v);
+          }}
           className="flex flex-col gap-5"
         >
           <TabsList>
             <TabsTrigger value="dashboard">
               <LayoutDashboard />
               Vue du mois
+            </TabsTrigger>
+            <TabsTrigger value="stats">
+              <BarChart3 />
+              Tableau de bord
             </TabsTrigger>
             <TabsTrigger value="people">
               <Users />
@@ -122,9 +138,9 @@ export default function App() {
             <TabsTrigger value="pleasure">
               <HeartHandshake />
               Plaisirs
-              {data.budgets.length ? (
+              {pleasureCount ? (
                 <Badge variant="secondary" className="ml-0.5">
-                  {data.budgets.length}
+                  {pleasureCount}
                 </Badge>
               ) : null}
             </TabsTrigger>
@@ -160,13 +176,24 @@ export default function App() {
               onGoTo={setTab}
               onToggleTransfer={wallet.toggleTransfer}
               onClearMonth={wallet.clearMonthTransfers}
+              onAddDebt={wallet.addDebt}
+              onUpdateDebt={wallet.updateDebt}
+              onRemoveDebt={wallet.removeDebt}
             />
+          </TabsContent>
+
+          <TabsContent value="stats">
+            <StatsTab data={data} result={result} month={month} />
           </TabsContent>
 
           <TabsContent value="people">
             <PeopleTab
               data={data}
               result={result}
+              openId={wallet.lastAdded}
+              onAddPersonal={wallet.addPersonal}
+              onUpdatePersonal={wallet.updatePersonal}
+              onRemovePersonal={wallet.removePersonal}
               onAdd={wallet.addPerson}
               onUpdate={wallet.updatePerson}
               onRemove={wallet.removePerson}
@@ -177,6 +204,7 @@ export default function App() {
             <ChargesTab
               data={data}
               result={result}
+              openId={wallet.lastAdded}
               onAdd={wallet.addCharge}
               onUpdate={wallet.updateCharge}
               onRemove={wallet.removeCharge}
@@ -188,6 +216,8 @@ export default function App() {
             <PleasureTab
               data={data}
               result={result}
+              month={month}
+              openId={wallet.lastAdded}
               onAdd={wallet.addBudget}
               onUpdate={wallet.updateBudget}
               onRemove={wallet.removeBudget}
@@ -198,6 +228,7 @@ export default function App() {
             <PersonalTab
               data={data}
               result={result}
+              openId={wallet.lastAdded}
               onAdd={wallet.addPersonal}
               onUpdate={wallet.updatePersonal}
               onRemove={wallet.removePersonal}

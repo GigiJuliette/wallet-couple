@@ -23,7 +23,7 @@ const PRESETS = [
   { label: "Eau", category: "Énergie" },
 ]
 
-export function ChargesTab({ data, result, onAdd, onUpdate, onRemove, onDuplicate }) {
+export function ChargesTab({ data, result, openId, onAdd, onUpdate, onRemove, onDuplicate }) {
   const s = data.settings
   const [query, setQuery] = React.useState("")
   const [payerFilter, setPayerFilter] = React.useState("all")
@@ -120,6 +120,7 @@ export function ChargesTab({ data, result, onAdd, onUpdate, onRemove, onDuplicat
             <ItemRow
               key={charge.id}
               item={charge}
+              defaultOpen={charge.id === openId}
               people={data.people}
               settings={s}
               computed={result.items.find((i) => i.id === charge.id)}

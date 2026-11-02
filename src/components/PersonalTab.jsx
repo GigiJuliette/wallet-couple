@@ -1,29 +1,38 @@
 import { Plus, Sparkles, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { EmptyState, StatCard } from "@/components/common"
+import { StatCard } from "@/components/common"
 import { ItemRow } from "@/components/ItemRow"
 import { formatMoney, formatPercent } from "@/lib/calc"
 
 const PRESETS = ["Salle de sport", "Téléphone", "Abonnement musique", "Crédit voiture", "Mutuelle"]
 
-export function PersonalTab({ data, result, onAdd, onUpdate, onRemove, onDuplicate }) {
+export function PersonalTab({ data, result, openId, onAdd, onUpdate, onRemove, onDuplicate }) {
   const s = data.settings
   const money = (v) => formatMoney(v, s)
+  const orphans = data.personal.filter((i) => !data.people.find((p) => p.id === i.owner))
+
+  const row = (item) => (
+    <ItemRow
+      key={item.id}
+      item={item}
+      defaultOpen={item.id === openId}
+      people={data.people}
+      settings={s}
+      variant="personal"
+      onUpdate={(patch) => onUpdate(item.id, patch)}
+      onRemove={() => onRemove(item.id)}
+      onDuplicate={() => onDuplicate(item.id)}
+    />
+  )
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold">Charges perso</h2>
-          <p className="text-xs text-muted-foreground">
-            Ce que chacun paie de son côté et qui n'est pas partagé. Ça ne change pas le prorata,
-            mais ça change le reste à vivre.
-          </p>
-        </div>
-        <Button size="sm" onClick={() => onAdd()}>
-          <Plus />
-          Ajouter une charge perso
-        </Button>
+      <div>
+        <h2 className="text-sm font-semibold">Charges perso</h2>
+        <p className="text-xs text-muted-foreground">
+          Ce que chacun paie de son côté et qui n'est pas partagé. Ça ne change pas le prorata,
+          mais ça change le reste à vivre.
+        </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -48,82 +57,61 @@ export function PersonalTab({ data, result, onAdd, onUpdate, onRemove, onDuplica
         ))}
       </div>
 
-      {data.personal.length === 0 ? (
-        <EmptyState
-          icon={UserRound}
-          title="Aucune charge perso enregistrée"
-          description="Le sport, le téléphone, un crédit : tout ce que vous payez chacun de votre côté sans le partager."
-          action={
-            <div className="flex flex-wrap justify-center gap-2">
-              {PRESETS.map((label) => (
-                <Button key={label} size="sm" variant="outline" onClick={() => onAdd({ label })}>
-                  <Sparkles />
-                  {label}
-                </Button>
-              ))}
-            </div>
-          }
-        />
-      ) : (
-        <div className="flex flex-col gap-5">
-          {data.people.map((person) => {
-            const items = data.personal.filter((i) => i.owner === person.id)
-            const computed = result.people.find((p) => p.id === person.id)
-            if (items.length === 0) return null
-            return (
-              <div key={person.id} className="flex flex-col gap-2.5">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="flex items-center gap-2 text-xs font-semibold">
-                    <span
-                      className="size-2.5 rounded-full"
-                      style={{ background: computed?.color }}
-                    />
-                    {person.name}
-                    <span className="font-normal text-muted-foreground">
-                      {items.length} ligne{items.length > 1 ? "s" : ""}
-                    </span>
-                  </h3>
-                  <span className="text-xs font-semibold tabular-nums">
+      <div className="grid items-start gap-5 lg:grid-cols-2">
+        {data.people.map((person) => {
+          const items = data.personal.filter((i) => i.owner === person.id)
+          const computed = result.people.find((p) => p.id === person.id)
+          return (
+            <div key={person.id} className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="flex items-center gap-2 text-xs font-semibold">
+                  <span
+                    className="size-2.5 rounded-full"
+                    style={{ background: computed?.color }}
+                  />
+                  {person.name}
+                  <span className="font-normal text-muted-foreground tabular-nums">
                     {money(computed?.personalTotal || 0)} / mois
                   </span>
-                </div>
-                {items.map((item) => (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    people={data.people}
-                    settings={s}
-                    variant="personal"
-                    onUpdate={(patch) => onUpdate(item.id, patch)}
-                    onRemove={() => onRemove(item.id)}
-                    onDuplicate={() => onDuplicate(item.id)}
-                  />
-                ))}
+                </h3>
+                <Button size="sm" variant="outline" onClick={() => onAdd({ owner: person.id })}>
+                  <Plus />
+                  Ajouter
+                </Button>
               </div>
-            )
-          })}
-
-          {data.personal.some((i) => !data.people.find((p) => p.id === i.owner)) ? (
-            <div className="flex flex-col gap-2.5">
-              <h3 className="text-xs font-semibold text-muted-foreground">Sans propriétaire</h3>
-              {data.personal
-                .filter((i) => !data.people.find((p) => p.id === i.owner))
-                .map((item) => (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    people={data.people}
-                    settings={s}
-                    variant="personal"
-                    onUpdate={(patch) => onUpdate(item.id, patch)}
-                    onRemove={() => onRemove(item.id)}
-                    onDuplicate={() => onDuplicate(item.id)}
-                  />
-                ))}
+              {items.length ? (
+                items.map(row)
+              ) : (
+                <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-6 text-center">
+                  <p className="text-xs text-muted-foreground">
+                    Aucune charge perso pour {person.name}.
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {PRESETS.map((label) => (
+                      <Button
+                        key={label}
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onAdd({ label, owner: person.id })}
+                      >
+                        <Sparkles />
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          ) : null}
+          )
+        })}
+      </div>
+
+      {orphans.length ? (
+        <div className="flex flex-col gap-2.5">
+          <h3 className="text-xs font-semibold text-muted-foreground">Sans propriétaire</h3>
+          {orphans.map(row)}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
