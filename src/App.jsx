@@ -1,6 +1,8 @@
 import * as React from "react";
 import {
+  ChartNoAxesColumn,
   ChevronLeft,
+  ClipboardCheck,
   ChevronRight,
   HeartHandshake,
   History,
@@ -24,6 +26,7 @@ import { PersonalTab } from "@/components/PersonalTab";
 import { SavingsTab } from "@/components/SavingsTab";
 import { HistoryTab } from "@/components/HistoryTab";
 import { SettingsTab } from "@/components/SettingsTab";
+import { BilanTab } from "@/components/BilanTab";
 import { useWallet } from "@/hooks/useWallet";
 import { currentMonthKey, monthLabel } from "@/lib/calc";
 
@@ -38,16 +41,16 @@ export default function App() {
   const wallet = useWallet(month);
   const { data, result } = wallet;
   const [tab, setTab] = React.useState("dashboard");
-  const oneOffCount =
-    data.budgets.filter((b) => b.month === month).length +
-    data.debts.filter((d) => d.month === month).length;
+  const oneOffCount = data.budgets.filter((b) => b.month === month).length;
 
   const dark = data.settings.theme === "dark";
   const tabs = [
     { value: "dashboard", icon: LayoutDashboard, label: "Vue du mois" },
-    { value: "charges", icon: Receipt, label: "Charges", count: data.charges.length },
+    { value: "charges", icon: Receipt, label: "Charges", count: data.charges.filter((c) => !c.variable).length },
+    { value: "variables", icon: ChartNoAxesColumn, label: "Variables", count: data.charges.filter((c) => c.variable).length },
     { value: "pleasure", icon: HeartHandshake, label: "Ponctuel", count: oneOffCount },
     { value: "personal", icon: UserRound, label: "Perso", count: data.personal.length },
+    { value: "bilan", icon: ClipboardCheck, label: "Bilan" },
     { value: "savings", icon: PiggyBank, label: "Cagnotte" },
     { value: "history", icon: History, label: "Historique" },
     { value: "settings", icon: Settings, label: "Réglages" },
@@ -121,20 +124,20 @@ export default function App() {
           }}
           className="flex flex-col gap-5"
         >
-          <TabsList className="flex w-full gap-0.5 md:inline-flex md:w-auto md:gap-1">
+          <TabsList className="flex w-full gap-0.5 lg:inline-flex lg:w-auto lg:gap-1">
             {tabs.map(({ value, icon: Icon, label, count }) => (
               <TabsTrigger
                 key={value}
                 value={value}
                 aria-label={label}
-                className="group min-w-0 flex-1 px-2 md:flex-none md:px-3"
+                className="group min-w-0 flex-1 px-1.5 lg:flex-none lg:px-3"
               >
                 <Icon />
-                <span className="hidden truncate group-data-[state=active]:inline md:inline">
+                <span className="hidden truncate sm:group-data-[state=active]:inline lg:inline">
                   {label}
                 </span>
                 {count ? (
-                  <Badge variant="secondary" className="ml-0.5 hidden md:inline-flex">
+                  <Badge variant="secondary" className="ml-0.5 hidden lg:inline-flex">
                     {count}
                   </Badge>
                 ) : null}
@@ -167,6 +170,19 @@ export default function App() {
             />
           </TabsContent>
 
+          <TabsContent value="variables">
+            <ChargesTab
+              variable
+              data={data}
+              result={result}
+              openId={wallet.lastAdded}
+              onAdd={wallet.addCharge}
+              onUpdate={wallet.updateCharge}
+              onRemove={wallet.removeCharge}
+              onDuplicate={wallet.duplicateCharge}
+            />
+          </TabsContent>
+
           <TabsContent value="pleasure">
             <PleasureTab
               data={data}
@@ -176,9 +192,6 @@ export default function App() {
               onAdd={wallet.addBudget}
               onUpdate={wallet.updateBudget}
               onRemove={wallet.removeBudget}
-              onAddDebt={wallet.addDebt}
-              onUpdateDebt={wallet.updateDebt}
-              onRemoveDebt={wallet.removeDebt}
             />
           </TabsContent>
 
@@ -192,6 +205,10 @@ export default function App() {
               onRemove={wallet.removePersonal}
               onDuplicate={wallet.duplicatePersonal}
             />
+          </TabsContent>
+
+          <TabsContent value="bilan">
+            <BilanTab data={data} month={month} onSetActual={wallet.setActual} />
           </TabsContent>
 
           <TabsContent value="savings">

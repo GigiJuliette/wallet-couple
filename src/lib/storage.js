@@ -1,4 +1,4 @@
-import { currentMonthKey, num, round2, toMonthly } from "./calc"
+import { REIMBURSEMENT, currentMonthKey, num, round2, toMonthly } from "./calc"
 
 export const STORAGE_KEY = "walletOrg"
 export const SCHEMA_VERSION = 1
@@ -39,8 +39,8 @@ export function defaultData() {
     budgets: [],
     personal: [],
     savings: [],
-    debts: [],
     payments: [],
+    actuals: {},
     history: [],
   }
 }
@@ -70,8 +70,8 @@ export function normalizeData(raw) {
     budgets: Array.isArray(raw.budgets) ? raw.budgets : [],
     personal: Array.isArray(raw.personal) ? raw.personal : [],
     savings: Array.isArray(raw.savings) ? raw.savings : [],
-    debts: Array.isArray(raw.debts) ? raw.debts : [],
     payments: Array.isArray(raw.payments) ? raw.payments : [],
+    actuals: raw.actuals && typeof raw.actuals === "object" ? raw.actuals : {},
     history: Array.isArray(raw.history) ? raw.history : [],
     version: SCHEMA_VERSION,
   }
@@ -108,8 +108,23 @@ export function normalizeData(raw) {
     customShares: c.customShares || {},
     category: fixCategory(c.category),
     note: c.note || "",
+    variable: c.variable === true,
     active: c.active !== false,
   }))
+
+  const legacyDebts = (Array.isArray(raw.debts) ? raw.debts : [])
+    .filter((d) => d && knownIds.includes(d.from) && knownIds.includes(d.to))
+    .map((d) => ({
+      id: d.id || uid("b"),
+      label: d.label || "Remboursement",
+      amount: d.amount ?? 0,
+      month: d.month || currentMonthKey(),
+      category: REIMBURSEMENT,
+      from: d.from,
+      to: d.to,
+    }))
+  data.budgets = [...data.budgets, ...legacyDebts]
+  delete data.debts
 
   data.budgets = data.budgets.map((b) => ({
     id: b.id || uid("b"),
@@ -122,6 +137,8 @@ export function normalizeData(raw) {
     category: fixCategory(b.category),
     note: b.note || "",
     month: b.month || currentMonthKey(),
+    from: knownIds.includes(b.from) ? b.from : knownIds[0] ?? null,
+    to: knownIds.includes(b.to) ? b.to : knownIds[1] ?? null,
     active: b.active !== false,
   }))
 
@@ -134,6 +151,7 @@ export function normalizeData(raw) {
     category: fixCategory(i.category),
     note: i.note || "",
     deduct: i.deduct === true,
+    variable: i.variable === true,
     active: i.active !== false,
   }))
 
@@ -146,17 +164,6 @@ export function normalizeData(raw) {
     createdAt: e.createdAt || new Date().toISOString(),
     active: e.active !== false,
   }))
-
-  data.debts = data.debts
-    .filter((d) => d && knownIds.includes(d.from) && knownIds.includes(d.to))
-    .map((d) => ({
-      id: d.id || uid("d"),
-      month: d.month || currentMonthKey(),
-      from: d.from,
-      to: d.to,
-      amount: d.amount ?? 0,
-      label: d.label ?? "",
-    }))
 
   const legacyDone = raw.done && typeof raw.done === "object" ? raw.done : {}
   const alreadyMigrated = new Set(data.payments.map((p) => `${p.month}|${p.transferId}`))
@@ -183,6 +190,19 @@ export function normalizeData(raw) {
       amount: num(p.amount),
       at: p.at || new Date().toISOString(),
     }))
+
+  data.actuals = Object.fromEntries(
+    Object.entries(data.actuals)
+      .filter(([, bucket]) => bucket && typeof bucket === "object")
+      .map(([month, bucket]) => [
+        month,
+        Object.fromEntries(
+          Object.entries(bucket)
+            .filter(([, v]) => v !== null && v !== "" && Number.isFinite(num(v)))
+            .map(([id, v]) => [id, num(v)])
+        ),
+      ])
+  )
 
   data.history = data.history
     .filter((h) => h && h.month)

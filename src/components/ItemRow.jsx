@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ChevronDown, Copy, Trash2 } from "lucide-react"
+import { ArrowLeftRight, ChevronDown, Copy, Trash2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,10 +21,11 @@ import {
   SplitSelect,
 } from "@/components/common"
 import { cn } from "@/lib/utils"
-import { CATEGORIES, categoryColor } from "@/lib/categories"
+import { CATEGORIES, ONE_OFF_CATEGORIES, categoryColor } from "@/lib/categories"
 import {
   JOINT,
   formatMoney,
+  isReimbursement,
   formatPercent,
   frequencyOf,
   num,
@@ -52,9 +53,23 @@ export function ItemRow({
   const payerName =
     item.payer === JOINT ? jointName : people.find((p) => p.id === item.payer)?.name || jointName
   const inactive = item.active === false
+  const debt = isReimbursement(item)
+  const nameOf = (id) => people.find((p) => p.id === id)?.name || "?"
+  const categories = oneShot ? ONE_OFF_CATEGORIES : CATEGORIES
+  const changeCategory = (category) => {
+    if (category === item.category) return
+    const patch = { category }
+    if (isReimbursement({ category })) {
+      patch.from = item.from || people[0]?.id
+      patch.to = item.to && item.to !== patch.from ? item.to : people.find((p) => p.id !== patch.from)?.id
+    }
+    onUpdate(patch)
+  }
   const meta = personal
-    ? [item.deduct ? "retiré du calcul" : null]
-    : [item.payer === JOINT ? jointName : `payé par ${payerName}`, splitLabel(item, settings)]
+    ? [item.variable ? "variable" : null, item.deduct ? "retiré du calcul" : null]
+    : debt
+      ? [`${nameOf(item.from)} → ${nameOf(item.to)}`]
+      : [item.payer === JOINT ? jointName : `payé par ${payerName}`, splitLabel(item, settings)]
   if (!oneShot && freq.value !== "monthly") {
     meta.push(`${formatMoney(item.amount, settings)} ${freq.short}`)
   }
@@ -160,16 +175,19 @@ export function ItemRow({
                   </Select>
                 </Field>
               ) : null}
-              {personal ? (
-                <Field label="Retirer du revenu pour le calcul du %">
-                  <div className="flex h-8 items-center">
-                    <Switch
-                      checked={Boolean(item.deduct)}
-                      onCheckedChange={(v) => onUpdate({ deduct: v })}
-                      aria-label="Retirer du revenu pour le calcul du pourcentage"
+              {personal ? null : debt ? (
+                <>
+                  <Field label="Qui doit">
+                    <PersonSelect
+                      value={item.from}
+                      people={people}
+                      onChange={(v) => onUpdate({ from: v })}
                     />
-                  </div>
-                </Field>
+                  </Field>
+                  <Field label="À qui">
+                    <PersonSelect value={item.to} people={people} onChange={(v) => onUpdate({ to: v })} />
+                  </Field>
+                </>
               ) : (
                 <>
                   <Field label="Prélevé sur quel compte">
@@ -193,13 +211,13 @@ export function ItemRow({
                 <Field label="Catégorie">
                   <Select
                     value={item.category || "Autre"}
-                    onValueChange={(v) => onUpdate({ category: v })}
+                    onValueChange={changeCategory}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {CATEGORIES.map((c) => (
+                      {categories.map((c) => (
                         <SelectItem key={c} value={c}>
                           <span className="flex items-center gap-2">
                             <CategoryIcon name={c} className="size-5" />
@@ -211,16 +229,29 @@ export function ItemRow({
                   </Select>
                 </Field>
               ) : null}
-              <Field label="Note" className="sm:col-span-2 lg:col-span-3">
-                <Input
-                  value={item.note || ""}
-                  onChange={(e) => onUpdate({ note: e.target.value })}
-                  placeholder="Date de prélèvement, référence, remarque..."
-                />
-              </Field>
             </div>
 
-            {!personal && item.split === "custom" ? (
+            {personal ? (
+              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+                <Switch
+                  checked={Boolean(item.deduct)}
+                  onCheckedChange={(v) => onUpdate({ deduct: v })}
+                />
+                <span className="text-sm font-medium">Retirer du revenu pour le calcul du %</span>
+              </label>
+            ) : null}
+
+            {debt && item.from === item.to ? (
+              <p className="text-xs text-destructive">Choisis deux personnes différentes.</p>
+            ) : null}
+
+            {debt ? (
+              <p className="text-xs text-muted-foreground">
+                Ajouté au virement entre vous dans Vue du mois, pour ce mois seulement.
+              </p>
+            ) : null}
+
+            {!personal && !debt && item.split === "custom" ? (
               <div className="rounded-lg border border-border bg-muted/40 p-3">
                 <p className="mb-2 text-xs font-medium">Parts manuelles</p>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -254,7 +285,7 @@ export function ItemRow({
               </div>
             ) : null}
 
-            {!personal && computed ? (
+            {!personal && !debt && computed ? (
               <div className="rounded-lg border border-border bg-muted/40 p-3">
                 <p className="mb-2 text-xs font-medium">Part de chacun sur cette ligne</p>
                 <div className="flex flex-wrap gap-x-5 gap-y-1.5">
@@ -280,7 +311,13 @@ export function ItemRow({
               </div>
             ) : null}
 
-            <div className="flex justify-end gap-1.5">
+            <div className="flex flex-wrap justify-end gap-1.5">
+              {!oneShot ? (
+                <Button size="sm" variant="ghost" onClick={() => onUpdate({ variable: !item.variable })}>
+                  <ArrowLeftRight />
+                  {item.variable ? "Passer en fixe" : "Passer en variable"}
+                </Button>
+              ) : null}
               {onDuplicate ? (
                 <Button size="sm" variant="ghost" onClick={onDuplicate}>
                   <Copy />
@@ -309,4 +346,21 @@ function splitLabel(item, settings) {
   if (mode === "equal") return "moitié-moitié"
   if (mode === "custom") return "parts manuelles"
   return "prorata"
+}
+
+function PersonSelect({ value, people, onChange }) {
+  return (
+    <Select value={value || ""} onValueChange={onChange}>
+      <SelectTrigger>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {people.map((p) => (
+          <SelectItem key={p.id} value={p.id}>
+            {p.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
 }

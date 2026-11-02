@@ -6,6 +6,7 @@ import {
   CreditCard,
   Dumbbell,
   Gift,
+  HandCoins,
   HeartPulse,
   House,
   PartyPopper,
@@ -20,6 +21,7 @@ import {
   UtensilsCrossed,
   Zap,
 } from "lucide-react"
+import { REIMBURSEMENT } from "@/lib/calc"
 
 export const CATEGORY_DEFS = [
   { name: "Logement", family: "blue", icon: House },
@@ -42,9 +44,11 @@ export const CATEGORY_DEFS = [
   { name: "Transport", family: "gray", icon: Car },
   { name: "Épargne", family: "gray", icon: PiggyBank },
   { name: "Autre", family: "gray", icon: Tag },
+  { name: REIMBURSEMENT, family: "green", icon: HandCoins, oneOffOnly: true },
 ]
 
-export const CATEGORIES = CATEGORY_DEFS.map((c) => c.name)
+export const CATEGORIES = CATEGORY_DEFS.filter((c) => !c.oneOffOnly).map((c) => c.name)
+export const ONE_OFF_CATEGORIES = CATEGORY_DEFS.map((c) => c.name)
 
 const FALLBACK = CATEGORY_DEFS.find((c) => c.name === "Autre")
 

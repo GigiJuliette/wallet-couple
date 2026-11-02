@@ -3,8 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { EmptyState, StatCard } from "@/components/common"
 import { ItemRow } from "@/components/ItemRow"
-import { DebtsCard } from "@/components/DebtsCard"
-import { formatMoney, formatPercent, monthLabel } from "@/lib/calc"
+import { REIMBURSEMENT, formatMoney, formatPercent, monthLabel } from "@/lib/calc"
 
 const PRESETS = [
   { label: "Resto", category: "Restos" },
@@ -13,6 +12,7 @@ const PRESETS = [
   { label: "Concert", category: "Sorties" },
   { label: "Cinéma", category: "Culture" },
   { label: "Déco maison", category: "Logement" },
+  { label: "Remboursement", category: REIMBURSEMENT },
 ]
 
 export function PleasureTab({
@@ -23,13 +23,15 @@ export function PleasureTab({
   onAdd,
   onUpdate,
   onRemove,
-  onAddDebt,
-  onUpdateDebt,
-  onRemoveDebt,
 }) {
   const s = data.settings
   const jointName = s.jointAccountName || "Compte joint"
   const items = data.budgets.filter((b) => b.month === month)
+  const [first, second] = data.people
+  const presetOf = (p) =>
+    p.category === REIMBURSEMENT
+      ? { ...p, month, from: first?.id, to: second?.id }
+      : { ...p, month }
 
   return (
     <div className="flex flex-col gap-4">
@@ -45,7 +47,7 @@ export function PleasureTab({
         </div>
         <Button size="sm" onClick={() => onAdd({ month })}>
           <Plus />
-          Ajouter un plaisir
+          Ajouter
         </Button>
       </div>
 
@@ -77,12 +79,11 @@ export function PleasureTab({
         />
       </div>
 
-      <h3 className="text-xs font-semibold">Plaisirs communs</h3>
       {items.length === 0 ? (
         <EmptyState
           icon={HeartHandshake}
-          title="Pas encore de plaisir ce mois-ci"
-          description="Un resto, un week-end, un cadeau commun : ça compte seulement pour ce mois."
+          title="Rien de ponctuel ce mois-ci"
+          description="Un resto, un week-end, un cadeau commun, ou un remboursement entre vous : ça compte seulement pour ce mois."
           action={
             <div className="flex flex-wrap justify-center gap-2">
               {PRESETS.map((p) => (
@@ -90,7 +91,7 @@ export function PleasureTab({
                   key={p.label}
                   size="sm"
                   variant="outline"
-                  onClick={() => onAdd({ label: p.label, category: p.category, month })}
+                  onClick={() => onAdd(presetOf(p))}
                 >
                   <Sparkles />
                   {p.label}
@@ -116,14 +117,6 @@ export function PleasureTab({
         </div>
       )}
 
-      <DebtsCard
-        data={data}
-        month={month}
-        onAdd={onAddDebt}
-        onUpdate={onUpdateDebt}
-        onRemove={onRemoveDebt}
-      />
-
       <Card>
         <CardHeader>
           <CardTitle>Comment ça marche</CardTitle>
@@ -133,7 +126,7 @@ export function PleasureTab({
           <p>plaisir créé en novembre → compté en novembre seulement</p>
           <p>payé par le {jointName.toLowerCase()} → ajouté au virement vers le {jointName.toLowerCase()}</p>
           <p>avancé par l'un de vous → l'autre lui rembourse sa part</p>
-          <p>remboursement ponctuel → ajouté au virement entre vous, ce mois seulement</p>
+          <p>catégorie « Remboursement » → pas partagé : ajouté au virement entre vous</p>
         </CardContent>
       </Card>
     </div>

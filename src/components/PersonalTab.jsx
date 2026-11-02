@@ -2,7 +2,7 @@ import { Plus, Sparkles, UserRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { StatCard } from "@/components/common"
 import { ItemRow } from "@/components/ItemRow"
-import { formatMoney, formatPercent } from "@/lib/calc"
+import { formatMoney, formatPercent, toMonthly } from "@/lib/calc"
 
 const PRESETS = ["Salle de sport", "Téléphone", "Abonnement musique", "Crédit voiture", "Mutuelle"]
 
@@ -10,6 +10,10 @@ export function PersonalTab({ data, result, openId, onAdd, onUpdate, onRemove, o
   const s = data.settings
   const money = (v) => formatMoney(v, s)
   const orphans = data.personal.filter((i) => !data.people.find((p) => p.id === i.owner))
+  const fixedTotal = (ownerId) =>
+    data.personal
+      .filter((i) => i.active !== false && !i.variable && (!ownerId || i.owner === ownerId))
+      .reduce((sum, i) => sum + toMonthly(i.amount, i.frequency), 0)
 
   const row = (item) => (
     <ItemRow
@@ -30,15 +34,15 @@ export function PersonalTab({ data, result, openId, onAdd, onUpdate, onRemove, o
       <div>
         <h2 className="text-sm font-semibold">Charges perso</h2>
         <p className="text-xs text-muted-foreground">
-          Ce que chacun paie de son côté et qui n'est pas partagé. Ça ne change pas le prorata,
-          mais ça change le reste à vivre.
+          Ce que chacun paie de son côté et qui n'est pas partagé. Les charges perso variables
+          sont marquées « variable » et se retrouvent dans le Bilan.
         </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard
-          label="Total charges perso"
-          value={money(result.personalTotalAll)}
+          label="Total charges perso fixes"
+          value={money(fixedTotal())}
           hint="tout le monde confondu"
           icon={UserRound}
           tone="primary"
@@ -46,11 +50,11 @@ export function PersonalTab({ data, result, openId, onAdd, onUpdate, onRemove, o
         {result.people.slice(0, 2).map((p) => (
           <StatCard
             key={p.id}
-            label={`Charges perso de ${p.name}`}
-            value={money(p.personalTotal)}
+            label={`Charges perso fixes de ${p.name}`}
+            value={money(fixedTotal(p.id))}
             hint={
               p.income > 0
-                ? `${formatPercent(p.personalTotal / p.income)} de son revenu`
+                ? `${formatPercent(fixedTotal(p.id) / p.income)} de son revenu`
                 : "revenu non renseigné"
             }
           />
@@ -71,7 +75,7 @@ export function PersonalTab({ data, result, openId, onAdd, onUpdate, onRemove, o
                   />
                   {person.name}
                   <span className="font-normal text-muted-foreground tabular-nums">
-                    {money(computed?.personalTotal || 0)} / mois
+                    {money(fixedTotal(person.id))} fixes / mois
                   </span>
                 </h3>
                 <Button size="sm" variant="outline" onClick={() => onAdd({ owner: person.id })}>

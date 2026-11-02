@@ -1,4 +1,9 @@
 export const JOINT = "joint"
+export const REIMBURSEMENT = "Remboursement"
+
+export function isReimbursement(item) {
+  return item?.category === REIMBURSEMENT
+}
 
 export const FREQUENCIES = [
   { value: "monthly", label: "par mois", short: "/mois", perMonth: 1 },
@@ -68,7 +73,7 @@ function distribute(total, ids, weights) {
 
 export function sharedItemsOf(data) {
   const charges = (data.charges || []).map((c) => ({ ...c, kind: "charge" }))
-  const budgets = (data.budgets || []).map((b) => ({
+  const budgets = (data.budgets || []).filter((b) => !isReimbursement(b)).map((b) => ({
     ...b,
     kind: "pleasure",
     frequency: "monthly",
@@ -198,8 +203,10 @@ export function compute(data, month = currentMonthKey()) {
 
   for (const item of personal) personalTotal[item.owner] += item.monthly
 
-  const debts = (data.debts || []).filter(
+  const debts = (data.budgets || []).filter(
     (d) =>
+      isReimbursement(d) &&
+      d.active !== false &&
       d.month === month &&
       ids.includes(d.from) &&
       ids.includes(d.to) &&

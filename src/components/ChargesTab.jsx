@@ -23,15 +23,32 @@ const PRESETS = [
   { label: "Eau", category: "Énergie" },
 ]
 
-export function ChargesTab({ data, result, openId, onAdd, onUpdate, onRemove, onDuplicate }) {
+const VARIABLE_PRESETS = [
+  { label: "Courses", category: "Courses" },
+  { label: "Essence", category: "Transport" },
+  { label: "Sorties", category: "Sorties" },
+]
+
+export function ChargesTab({
+  data,
+  result,
+  openId,
+  variable = false,
+  onAdd,
+  onUpdate,
+  onRemove,
+  onDuplicate,
+}) {
   const s = data.settings
   const [query, setQuery] = React.useState("")
   const [payerFilter, setPayerFilter] = React.useState("all")
 
-  const visible = data.charges.filter((c) => {
+  const list = data.charges.filter((c) => Boolean(c.variable) === variable)
+  const add = (preset = {}) => onAdd({ ...preset, variable })
+  const visible = list.filter((c) => {
     const okQuery =
       !query ||
-      `${c.label} ${c.category} ${c.note}`.toLowerCase().includes(query.toLowerCase())
+      `${c.label} ${c.category}`.toLowerCase().includes(query.toLowerCase())
     const okPayer = payerFilter === "all" || c.payer === payerFilter
     return okQuery && okPayer
   })
@@ -44,12 +61,16 @@ export function ChargesTab({ data, result, openId, onAdd, onUpdate, onRemove, on
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold">Charges communes</h2>
+          <h2 className="text-sm font-semibold">
+            {variable ? "Charges variables communes" : "Charges fixes communes"}
+          </h2>
           <p className="text-xs text-muted-foreground">
-            Tout ce que vous voulez partager, peu importe le compte qui paie.
+            {variable
+              ? "Ce qui change d'un mois à l'autre (courses, essence…). Le réel se note dans le Bilan."
+              : "Ce qui ne bouge pas d'un mois à l'autre, peu importe le compte qui paie."}
           </p>
         </div>
-        <Button size="sm" onClick={() => onAdd()}>
+        <Button size="sm" onClick={() => add()}>
           <Plus />
           Ajouter une charge
         </Button>
@@ -91,19 +112,19 @@ export function ChargesTab({ data, result, openId, onAdd, onUpdate, onRemove, on
         </CardContent>
       </Card>
 
-      {data.charges.length === 0 ? (
+      {list.length === 0 ? (
         <EmptyState
           icon={Receipt}
           title="Aucune charge pour l'instant"
           description="Commencez par une ligne rapide, vous ajusterez les montants après."
           action={
             <div className="flex flex-wrap justify-center gap-2">
-              {PRESETS.map((p) => (
+              {(variable ? VARIABLE_PRESETS : PRESETS).map((p) => (
                 <Button
                   key={p.label}
                   size="sm"
                   variant="outline"
-                  onClick={() => onAdd({ label: p.label, category: p.category })}
+                  onClick={() => add({ label: p.label, category: p.category })}
                 >
                   <Sparkles />
                   {p.label}

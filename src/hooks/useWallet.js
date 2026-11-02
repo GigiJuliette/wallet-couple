@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { clearData, defaultData, loadData, normalizeData, saveData, uid } from "@/lib/storage"
-import { compute, currentMonthKey, paymentProgress } from "@/lib/calc"
+import { REIMBURSEMENT, compute, currentMonthKey, paymentProgress } from "@/lib/calc"
 
 export function useWallet(month) {
   const [data, setData] = useState(() => loadData())
@@ -57,7 +57,9 @@ export function useWallet(month) {
           fix(d.charges)
           fix(d.budgets)
           d.personal = d.personal.filter((i) => i.owner !== id)
-          d.debts = d.debts.filter((x) => x.from !== id && x.to !== id)
+          d.budgets = d.budgets.filter(
+            (b) => !(b.category === REIMBURSEMENT && (b.from === id || b.to === id))
+          )
           d.payments = d.payments.filter((x) => !x.transferId.includes(id))
           return d
         }),
@@ -194,34 +196,6 @@ export function useWallet(month) {
         setLastAdded(copyId)
       },
 
-      addDebt: (preset = {}) =>
-        update((d) => {
-          const [first, second] = d.people
-          d.debts.push({
-            id: uid("d"),
-            month: currentMonthKey(),
-            from: first?.id,
-            to: second?.id,
-            amount: 0,
-            label: "",
-            ...preset,
-          })
-          return d
-        }),
-
-      updateDebt: (id, patch) =>
-        update((d) => {
-          const x = d.debts.find((e) => e.id === id)
-          if (x) Object.assign(x, patch)
-          return d
-        }),
-
-      removeDebt: (id) =>
-        update((d) => {
-          d.debts = d.debts.filter((e) => e.id !== id)
-          return d
-        }),
-
       addSaving: (preset = {}) =>
         update((d) => {
           d.savings.unshift({
@@ -265,6 +239,16 @@ export function useWallet(month) {
       removePayment: (id) =>
         update((d) => {
           d.payments = d.payments.filter((p) => p.id !== id)
+          return d
+        }),
+
+      setActual: (month, itemId, amount) =>
+        update((d) => {
+          const bucket = d.actuals[month] || {}
+          if (amount === null) delete bucket[itemId]
+          else bucket[itemId] = amount
+          if (Object.keys(bucket).length) d.actuals[month] = bucket
+          else delete d.actuals[month]
           return d
         }),
 
@@ -312,7 +296,7 @@ export function useWallet(month) {
               charges: d.charges,
               budgets: d.budgets,
               personal: d.personal,
-              debts: d.debts.filter((x) => x.month === key),
+              actuals: d.actuals[key] || {},
               settings: d.settings,
             },
           }
@@ -336,9 +320,9 @@ export function useWallet(month) {
               b.month ? b : { ...b, month: entry.month }
             )
             d.personal = structuredClone(entry.snapshot.personal || [])
-            if (entry.snapshot.debts) {
-              const restored = structuredClone(entry.snapshot.debts)
-              d.debts = [...d.debts.filter((x) => x.month !== entry.month), ...restored]
+            for (const x of entry.snapshot.debts || []) {
+              if (d.budgets.some((b) => b.id === x.id)) continue
+              d.budgets.push({ ...structuredClone(x), category: REIMBURSEMENT, active: true })
             }
           }
           return d
