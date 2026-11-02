@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { clearData, defaultData, loadData, normalizeData, saveData, uid } from "@/lib/storage"
-import { compute, currentMonthKey } from "@/lib/calc"
+import { compute, currentMonthKey, paymentProgress } from "@/lib/calc"
 
 export function useWallet(month) {
   const [data, setData] = useState(() => loadData())
@@ -58,6 +58,7 @@ export function useWallet(month) {
           fix(d.budgets)
           d.personal = d.personal.filter((i) => i.owner !== id)
           d.debts = d.debts.filter((x) => x.from !== id && x.to !== id)
+          d.payments = d.payments.filter((x) => !x.transferId.includes(id))
           return d
         }),
 
@@ -249,19 +250,27 @@ export function useWallet(month) {
           return d
         }),
 
-      toggleTransfer: (month, transferId, amount) =>
+      addPayment: (month, transferId, amount) =>
         update((d) => {
-          const bucket = d.done[month] || {}
-          if (bucket[transferId]) delete bucket[transferId]
-          else bucket[transferId] = { at: new Date().toISOString(), amount }
-          if (Object.keys(bucket).length) d.done[month] = bucket
-          else delete d.done[month]
+          d.payments.push({
+            id: uid("v"),
+            month,
+            transferId,
+            amount,
+            at: new Date().toISOString(),
+          })
           return d
         }),
 
-      clearMonthTransfers: (month) =>
+      removePayment: (id) =>
         update((d) => {
-          delete d.done[month]
+          d.payments = d.payments.filter((p) => p.id !== id)
+          return d
+        }),
+
+      clearMonthPayments: (month) =>
+        update((d) => {
+          d.payments = d.payments.filter((p) => p.month !== month)
           return d
         }),
 
@@ -269,6 +278,7 @@ export function useWallet(month) {
         update((d) => {
           const key = month || currentMonthKey()
           const result = compute(d, key)
+          const progress = paymentProgress(result.transfers, d.payments, key)
           const entry = {
             id: uid("h"),
             month: key,
@@ -281,11 +291,10 @@ export function useWallet(month) {
               jointTotal: result.jointTotal,
               personalTotalAll: result.personalTotalAll,
               savingsTotal: result.savings.total,
-              transfers: result.transfers.map((t) => ({
-                ...t,
-                done: Boolean(d.done[key]?.[t.id]),
-                doneAt: d.done[key]?.[t.id]?.at || null,
-              })),
+              transfers: result.transfers.map((t) => {
+                const p = progress.byTransfer[t.id]
+                return { ...t, paid: p.paid, done: p.complete, doneAt: p.complete ? p.lastAt : null }
+              }),
               people: result.people.map((p) => ({
                 id: p.id,
                 name: p.name,

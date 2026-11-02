@@ -381,43 +381,35 @@ export function currentMonthKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
 }
 
-export function categoryBreakdown(result, view) {
-  const rows = new Map()
-  const add = (category, commun, perso) => {
-    const key = category || "Autre"
-    const row = rows.get(key) || { category: key, commun: 0, perso: 0 }
-    row.commun += commun
-    row.perso += perso
-    rows.set(key, row)
-  }
-
-  const person = result.people.find((p) => p.id === view)
-  for (const item of result.items) {
-    const amount = person ? item.monthly * (item.weights[person.id] || 0) : item.monthly
-    if (amount > 0.005) add(item.category, amount, 0)
-  }
-  if (view !== "commun") {
-    for (const item of result.personal) {
-      if (person && item.owner !== person.id) continue
-      if (item.monthly > 0.005) add(item.category, 0, item.monthly)
+export function paymentProgress(transfers, payments, month) {
+  const ofMonth = (payments || []).filter((p) => p.month === month)
+  const byTransfer = {}
+  for (const t of transfers) {
+    const list = ofMonth
+      .filter((p) => p.transferId === t.id)
+      .sort((a, b) => cmp(a.at, b.at))
+    const paid = round2(list.reduce((s, p) => s + num(p.amount), 0))
+    byTransfer[t.id] = {
+      list,
+      paid,
+      remaining: round2(Math.max(0, t.amount - paid)),
+      extra: round2(Math.max(0, paid - t.amount)),
+      complete: paid >= t.amount - 0.005,
+      lastAt: list.length ? list[list.length - 1].at : null,
     }
   }
-
-  const list = [...rows.values()]
-    .map((r) => ({
-      ...r,
-      commun: round2(r.commun),
-      perso: round2(r.perso),
-      total: round2(r.commun + r.perso),
-    }))
-    .sort((a, b) => b.total - a.total)
-  const total = round2(list.reduce((s, r) => s + r.total, 0))
-  const income = person ? person.income : result.totalIncome
+  const known = new Set(transfers.map((t) => t.id))
+  const due = round2(transfers.reduce((s, t) => s + t.amount, 0))
+  const covered = round2(
+    transfers.reduce((s, t) => s + Math.min(t.amount, byTransfer[t.id].paid), 0)
+  )
   return {
-    rows: list.map((r) => ({ ...r, share: total > 0 ? r.total / total : 0 })),
-    total,
-    commun: round2(list.reduce((s, r) => s + r.commun, 0)),
-    perso: round2(list.reduce((s, r) => s + r.perso, 0)),
-    income,
+    byTransfer,
+    orphans: ofMonth.filter((p) => !known.has(p.transferId)),
+    due,
+    covered,
+    paid: round2(ofMonth.reduce((s, p) => s + num(p.amount), 0)),
+    count: ofMonth.length,
+    complete: transfers.length > 0 && transfers.every((t) => byTransfer[t.id].complete),
   }
 }

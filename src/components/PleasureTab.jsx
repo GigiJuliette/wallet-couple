@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { EmptyState, StatCard } from "@/components/common"
 import { ItemRow } from "@/components/ItemRow"
+import { DebtsCard } from "@/components/DebtsCard"
 import { formatMoney, formatPercent, monthLabel } from "@/lib/calc"
 
 const PRESETS = [
@@ -14,7 +15,18 @@ const PRESETS = [
   { label: "Déco maison", category: "Logement" },
 ]
 
-export function PleasureTab({ data, result, month, openId, onAdd, onUpdate, onRemove }) {
+export function PleasureTab({
+  data,
+  result,
+  month,
+  openId,
+  onAdd,
+  onUpdate,
+  onRemove,
+  onAddDebt,
+  onUpdateDebt,
+  onRemoveDebt,
+}) {
   const s = data.settings
   const jointName = s.jointAccountName || "Compte joint"
   const items = data.budgets.filter((b) => b.month === month)
@@ -24,16 +36,16 @@ export function PleasureTab({ data, result, month, openId, onAdd, onUpdate, onRe
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">
-            Plaisirs communs · {monthLabel(month, s.locale)}
+            Ponctuel · {monthLabel(month, s.locale)}
           </h2>
           <p className="text-xs text-muted-foreground">
-            Des dépenses communes qui ne comptent que pour ce mois. Ce qui revient chaque mois va
-            dans les charges.
+            Ce qui ne compte que pour ce mois : les plaisirs communs et les remboursements entre
+            vous. Ce qui revient chaque mois va dans les charges.
           </p>
         </div>
         <Button size="sm" onClick={() => onAdd({ month })}>
           <Plus />
-          Ajouter une dépense
+          Ajouter un plaisir
         </Button>
       </div>
 
@@ -65,6 +77,7 @@ export function PleasureTab({ data, result, month, openId, onAdd, onUpdate, onRe
         />
       </div>
 
+      <h3 className="text-xs font-semibold">Plaisirs communs</h3>
       {items.length === 0 ? (
         <EmptyState
           icon={HeartHandshake}
@@ -103,6 +116,14 @@ export function PleasureTab({ data, result, month, openId, onAdd, onUpdate, onRe
         </div>
       )}
 
+      <DebtsCard
+        data={data}
+        month={month}
+        onAdd={onAddDebt}
+        onUpdate={onUpdateDebt}
+        onRemove={onRemoveDebt}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle>Comment ça marche</CardTitle>
@@ -112,6 +133,7 @@ export function PleasureTab({ data, result, month, openId, onAdd, onUpdate, onRe
           <p>plaisir créé en novembre → compté en novembre seulement</p>
           <p>payé par le {jointName.toLowerCase()} → ajouté au virement vers le {jointName.toLowerCase()}</p>
           <p>avancé par l'un de vous → l'autre lui rembourse sa part</p>
+          <p>remboursement ponctuel → ajouté au virement entre vous, ce mois seulement</p>
         </CardContent>
       </Card>
     </div>

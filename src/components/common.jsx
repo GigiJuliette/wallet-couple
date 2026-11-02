@@ -192,7 +192,7 @@ export function CategoryBadge({ name, className }) {
         "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-foreground",
         className
       )}
-      style={{ background: `color-mix(in oklch, ${color} 18%, transparent)` }}
+      style={{ background: `color-mix(in oklab, ${color} 18%, transparent)` }}
     >
       <Icon className="size-3.5 shrink-0" style={{ color }} />
       {def.name}
@@ -207,7 +207,7 @@ export function CategoryIcon({ name, className }) {
   return (
     <span
       className={cn("flex size-7 shrink-0 items-center justify-center rounded-md", className)}
-      style={{ background: `color-mix(in oklch, ${color} 18%, transparent)` }}
+      style={{ background: `color-mix(in oklab, ${color} 18%, transparent)` }}
     >
       <Icon className="size-3.5" style={{ color }} />
     </span>

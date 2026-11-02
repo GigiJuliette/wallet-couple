@@ -40,7 +40,7 @@ export function defaultData() {
     personal: [],
     savings: [],
     debts: [],
-    done: {},
+    payments: [],
     history: [],
   }
 }
@@ -71,7 +71,7 @@ export function normalizeData(raw) {
     personal: Array.isArray(raw.personal) ? raw.personal : [],
     savings: Array.isArray(raw.savings) ? raw.savings : [],
     debts: Array.isArray(raw.debts) ? raw.debts : [],
-    done: raw.done && typeof raw.done === "object" ? raw.done : {},
+    payments: Array.isArray(raw.payments) ? raw.payments : [],
     history: Array.isArray(raw.history) ? raw.history : [],
     version: SCHEMA_VERSION,
   }
@@ -156,6 +156,32 @@ export function normalizeData(raw) {
       to: d.to,
       amount: d.amount ?? 0,
       label: d.label ?? "",
+    }))
+
+  const legacyDone = raw.done && typeof raw.done === "object" ? raw.done : {}
+  const alreadyMigrated = new Set(data.payments.map((p) => `${p.month}|${p.transferId}`))
+  for (const [month, bucket] of Object.entries(legacyDone)) {
+    for (const [transferId, entry] of Object.entries(bucket || {})) {
+      if (alreadyMigrated.has(`${month}|${transferId}`)) continue
+      data.payments.push({
+        id: uid("v"),
+        month,
+        transferId,
+        amount: num(entry?.amount),
+        at: entry?.at || new Date().toISOString(),
+      })
+    }
+  }
+  delete data.done
+
+  data.payments = data.payments
+    .filter((p) => p && p.month && p.transferId)
+    .map((p) => ({
+      id: p.id || uid("v"),
+      month: p.month,
+      transferId: p.transferId,
+      amount: num(p.amount),
+      at: p.at || new Date().toISOString(),
     }))
 
   data.history = data.history

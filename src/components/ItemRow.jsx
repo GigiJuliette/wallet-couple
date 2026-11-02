@@ -1,10 +1,9 @@
 import * as React from "react"
-import { ChevronDown, Copy, Landmark, Trash2, UserRound } from "lucide-react"
+import { ChevronDown, Copy, Trash2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
-import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import {
   Select,
@@ -14,7 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  CategoryBadge,
   CategoryIcon,
   Field,
   FrequencySelect,
@@ -29,7 +27,6 @@ import {
   formatMoney,
   formatPercent,
   frequencyOf,
-  monthLabel,
   num,
   toMonthly,
 } from "@/lib/calc"
@@ -52,10 +49,16 @@ export function ItemRow({
   const monthly = oneShot ? num(item.amount) : toMonthly(item.amount, item.frequency)
   const freq = frequencyOf(item.frequency)
   const jointName = settings.jointAccountName || "Compte joint"
-  const owner = people.find((p) => p.id === item.owner)
   const payerName =
     item.payer === JOINT ? jointName : people.find((p) => p.id === item.payer)?.name || jointName
   const inactive = item.active === false
+  const meta = personal
+    ? [item.deduct ? "retiré du calcul" : null]
+    : [item.payer === JOINT ? jointName : `payé par ${payerName}`, splitLabel(item, settings)]
+  if (!oneShot && freq.value !== "monthly") {
+    meta.push(`${formatMoney(item.amount, settings)} ${freq.short}`)
+  }
+  const metaList = meta.filter(Boolean)
 
   return (
     <Card
@@ -63,112 +66,84 @@ export function ItemRow({
       style={
         showCategory
           ? {
-              background: `color-mix(in oklch, ${categoryColor(item.category)} 7%, var(--card))`,
-              borderColor: `color-mix(in oklch, ${categoryColor(item.category)} 25%, var(--border))`,
+              background: `color-mix(in oklab, ${categoryColor(item.category)} 7%, var(--card))`,
+              borderColor: `color-mix(in oklab, ${categoryColor(item.category)} 25%, var(--border))`,
             }
           : undefined
       }
     >
-      <CardContent className="@container flex flex-col gap-3 pt-4">
-        <div className="grid grid-cols-2 items-end gap-3 @2xl:grid-cols-12">
-          <div className="col-span-2 flex items-center gap-3 @2xl:col-span-4">
+      <CardContent className="@container flex flex-col gap-3 px-3 pb-0">
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault()
+              setOpen((o) => !o)
+            }
+          }}
+          className="-mx-3 flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl px-3 py-1.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+        >
+          <span onClick={(e) => e.stopPropagation()} className="flex">
             <Switch
               checked={item.active !== false}
               onCheckedChange={(v) => onUpdate({ active: v })}
               aria-label="Activer cette ligne"
             />
-            <Input
-              value={item.label}
-              onChange={(e) => onUpdate({ label: e.target.value })}
-              placeholder="Intitulé"
-              className="font-medium"
-            />
-          </div>
-
-          <div className="@2xl:col-span-2">
-            <MoneyInput
-              value={item.amount}
-              currency={settings.currency}
-              onChange={(v) => onUpdate({ amount: v })}
-            />
-          </div>
-
-          <div className="@2xl:col-span-3">
-            {oneShot ? (
-              <p className="flex h-9 items-center text-sm text-muted-foreground">une seule fois</p>
-            ) : (
-              <FrequencySelect
-                value={item.frequency}
-                onChange={(v) => onUpdate({ frequency: v })}
-              />
+          </span>
+          {showCategory ? <CategoryIcon name={item.category} /> : null}
+          <span className="min-w-0 flex-1 truncate text-sm">
+            <span className="font-medium">{item.label || "Sans nom"}</span>
+            {metaList.length ? (
+              <span className="hidden text-xs text-muted-foreground @md:inline">
+                {metaList.map((m) => ` · ${m}`).join("")}
+              </span>
+            ) : null}
+          </span>
+          <span className="shrink-0 text-right text-sm font-semibold tabular-nums">
+            {formatMoney(monthly, settings)}
+            {oneShot ? null : (
+              <span className="ml-0.5 text-xs font-normal text-muted-foreground">/mois</span>
             )}
-          </div>
-
-          <div className="col-span-2 flex items-center justify-between gap-2 @2xl:col-span-3">
-            <div className="min-w-0">
-              <p className="text-[11px] text-muted-foreground">{oneShot ? "ce mois-ci" : "ramené au mois"}</p>
-              <p className="truncate text-sm font-semibold tabular-nums">
-                {formatMoney(monthly, settings)}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                onClick={() => setOpen((o) => !o)}
-                aria-label="Détails"
-              >
-                <ChevronDown className={cn("transition-transform", open && "rotate-180")} />
-              </Button>
-              {onDuplicate ? (
-                <Button size="icon-sm" variant="ghost" onClick={onDuplicate} aria-label="Dupliquer">
-                  <Copy />
-                </Button>
-              ) : null}
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                className="text-muted-foreground hover:text-destructive"
-                onClick={onRemove}
-                aria-label="Supprimer"
-              >
-                <Trash2 />
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {personal ? (
-            <>
-              <Badge variant="soft">
-                <UserRound />
-                {owner ? `pour ${owner.name}` : "sans propriétaire"}
-              </Badge>
-              {item.deduct ? <Badge variant="outline">retiré du calcul</Badge> : null}
-            </>
-          ) : (
-            <>
-              <Badge variant={item.payer === JOINT ? "soft" : "outline"}>
-                {item.payer === JOINT ? <Landmark /> : null}
-                {item.payer === JOINT ? jointName : `payé par ${payerName}`}
-              </Badge>
-              <Badge variant="outline">{splitLabel(item, settings)}</Badge>
-            </>
-          )}
-          {showCategory ? <CategoryBadge name={item.category} /> : null}
-          {oneShot ? (
-            <Badge variant="outline">{monthLabel(item.month, settings.locale)}</Badge>
-          ) : null}
-          {!oneShot && freq.value !== "monthly" ? (
-            <Badge variant="outline">{`${formatMoney(item.amount, settings)} ${freq.short}`}</Badge>
-          ) : null}
+          </span>
+          <ChevronDown
+            className={cn(
+              "size-4 shrink-0 text-muted-foreground transition-transform",
+              open && "rotate-180"
+            )}
+          />
         </div>
 
         {open ? (
-          <>
+          <div className="flex flex-col gap-3 pb-3">
             <Separator />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="Intitulé">
+                <Input
+                  value={item.label}
+                  onChange={(e) => onUpdate({ label: e.target.value })}
+                  placeholder="Intitulé"
+                  autoFocus={defaultOpen}
+                />
+              </Field>
+              <Field label="Montant">
+                <MoneyInput
+                  value={item.amount}
+                  currency={settings.currency}
+                  onChange={(v) => onUpdate({ amount: v })}
+                />
+              </Field>
+              {oneShot ? null : (
+                <Field label="Tous les combien">
+                  <FrequencySelect
+                    value={item.frequency}
+                    onChange={(v) => onUpdate({ frequency: v })}
+                  />
+                </Field>
+              )}
               {personal ? (
                 <Field label="C'est la charge de qui">
                   <Select value={item.owner || ""} onValueChange={(v) => onUpdate({ owner: v })}>
@@ -187,7 +162,7 @@ export function ItemRow({
               ) : null}
               {personal ? (
                 <Field label="Retirer du revenu pour le calcul du %">
-                  <div className="flex h-9 items-center">
+                  <div className="flex h-8 items-center">
                     <Switch
                       checked={Boolean(item.deduct)}
                       onCheckedChange={(v) => onUpdate({ deduct: v })}
@@ -304,7 +279,25 @@ export function ItemRow({
                 ) : null}
               </div>
             ) : null}
-          </>
+
+            <div className="flex justify-end gap-1.5">
+              {onDuplicate ? (
+                <Button size="sm" variant="ghost" onClick={onDuplicate}>
+                  <Copy />
+                  Dupliquer
+                </Button>
+              ) : null}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground hover:text-destructive"
+                onClick={onRemove}
+              >
+                <Trash2 />
+                Supprimer
+              </Button>
+            </div>
+          </div>
         ) : null}
       </CardContent>
     </Card>

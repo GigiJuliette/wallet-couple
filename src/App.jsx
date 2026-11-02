@@ -1,6 +1,5 @@
 import * as React from "react";
 import {
-  BarChart3,
   ChevronLeft,
   ChevronRight,
   HeartHandshake,
@@ -12,7 +11,6 @@ import {
   Settings,
   Sun,
   UserRound,
-  Users,
   Wallet,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -26,7 +24,6 @@ import { PersonalTab } from "@/components/PersonalTab";
 import { SavingsTab } from "@/components/SavingsTab";
 import { HistoryTab } from "@/components/HistoryTab";
 import { SettingsTab } from "@/components/SettingsTab";
-import { StatsTab } from "@/components/StatsTab";
 import { useWallet } from "@/hooks/useWallet";
 import { currentMonthKey, monthLabel } from "@/lib/calc";
 
@@ -41,9 +38,20 @@ export default function App() {
   const wallet = useWallet(month);
   const { data, result } = wallet;
   const [tab, setTab] = React.useState("dashboard");
-  const pleasureCount = data.budgets.filter((b) => b.month === month).length;
+  const oneOffCount =
+    data.budgets.filter((b) => b.month === month).length +
+    data.debts.filter((d) => d.month === month).length;
 
   const dark = data.settings.theme === "dark";
+  const tabs = [
+    { value: "dashboard", icon: LayoutDashboard, label: "Vue du mois" },
+    { value: "charges", icon: Receipt, label: "Charges", count: data.charges.length },
+    { value: "pleasure", icon: HeartHandshake, label: "Ponctuel", count: oneOffCount },
+    { value: "personal", icon: UserRound, label: "Perso", count: data.personal.length },
+    { value: "savings", icon: PiggyBank, label: "Cagnotte" },
+    { value: "history", icon: History, label: "Historique" },
+    { value: "settings", icon: Settings, label: "Réglages" },
+  ];
 
   return (
     <div className="min-h-dvh bg-background">
@@ -113,58 +121,25 @@ export default function App() {
           }}
           className="flex flex-col gap-5"
         >
-          <TabsList>
-            <TabsTrigger value="dashboard">
-              <LayoutDashboard />
-              Vue du mois
-            </TabsTrigger>
-            <TabsTrigger value="stats">
-              <BarChart3 />
-              Tableau de bord
-            </TabsTrigger>
-            <TabsTrigger value="people">
-              <Users />
-              Revenus
-            </TabsTrigger>
-            <TabsTrigger value="charges">
-              <Receipt />
-              Charges
-              {data.charges.length ? (
-                <Badge variant="secondary" className="ml-0.5">
-                  {data.charges.length}
-                </Badge>
-              ) : null}
-            </TabsTrigger>
-            <TabsTrigger value="pleasure">
-              <HeartHandshake />
-              Plaisirs
-              {pleasureCount ? (
-                <Badge variant="secondary" className="ml-0.5">
-                  {pleasureCount}
-                </Badge>
-              ) : null}
-            </TabsTrigger>
-            <TabsTrigger value="personal">
-              <UserRound />
-              Perso
-              {data.personal.length ? (
-                <Badge variant="secondary" className="ml-0.5">
-                  {data.personal.length}
-                </Badge>
-              ) : null}
-            </TabsTrigger>
-            <TabsTrigger value="savings">
-              <PiggyBank />
-              Cagnotte
-            </TabsTrigger>
-            <TabsTrigger value="history">
-              <History />
-              Historique
-            </TabsTrigger>
-            <TabsTrigger value="settings">
-              <Settings />
-              Réglages
-            </TabsTrigger>
+          <TabsList className="flex w-full gap-0.5 md:inline-flex md:w-auto md:gap-1">
+            {tabs.map(({ value, icon: Icon, label, count }) => (
+              <TabsTrigger
+                key={value}
+                value={value}
+                aria-label={label}
+                className="group min-w-0 flex-1 px-2 md:flex-none md:px-3"
+              >
+                <Icon />
+                <span className="hidden truncate group-data-[state=active]:inline md:inline">
+                  {label}
+                </span>
+                {count ? (
+                  <Badge variant="secondary" className="ml-0.5 hidden md:inline-flex">
+                    {count}
+                  </Badge>
+                ) : null}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           <TabsContent value="dashboard">
@@ -174,29 +149,9 @@ export default function App() {
               month={month}
               onArchive={wallet.archiveMonth}
               onGoTo={setTab}
-              onToggleTransfer={wallet.toggleTransfer}
-              onClearMonth={wallet.clearMonthTransfers}
-              onAddDebt={wallet.addDebt}
-              onUpdateDebt={wallet.updateDebt}
-              onRemoveDebt={wallet.removeDebt}
-            />
-          </TabsContent>
-
-          <TabsContent value="stats">
-            <StatsTab data={data} result={result} month={month} />
-          </TabsContent>
-
-          <TabsContent value="people">
-            <PeopleTab
-              data={data}
-              result={result}
-              openId={wallet.lastAdded}
-              onAddPersonal={wallet.addPersonal}
-              onUpdatePersonal={wallet.updatePersonal}
-              onRemovePersonal={wallet.removePersonal}
-              onAdd={wallet.addPerson}
-              onUpdate={wallet.updatePerson}
-              onRemove={wallet.removePerson}
+              onAddPayment={wallet.addPayment}
+              onRemovePayment={wallet.removePayment}
+              onClearMonth={wallet.clearMonthPayments}
             />
           </TabsContent>
 
@@ -221,6 +176,9 @@ export default function App() {
               onAdd={wallet.addBudget}
               onUpdate={wallet.updateBudget}
               onRemove={wallet.removeBudget}
+              onAddDebt={wallet.addDebt}
+              onUpdateDebt={wallet.updateDebt}
+              onRemoveDebt={wallet.removeDebt}
             />
           </TabsContent>
 
@@ -257,7 +215,18 @@ export default function App() {
             />
           </TabsContent>
 
-          <TabsContent value="settings">
+          <TabsContent value="settings" className="flex flex-col gap-8">
+            <PeopleTab
+              data={data}
+              result={result}
+              openId={wallet.lastAdded}
+              onAddPersonal={wallet.addPersonal}
+              onUpdatePersonal={wallet.updatePersonal}
+              onRemovePersonal={wallet.removePersonal}
+              onAdd={wallet.addPerson}
+              onUpdate={wallet.updatePerson}
+              onRemove={wallet.removePerson}
+            />
             <SettingsTab
               data={data}
               onSetSetting={wallet.setSetting}

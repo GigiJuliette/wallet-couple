@@ -1,9 +1,11 @@
+import * as React from "react"
 import {
   ArrowRight,
   Banknote,
-  HandCoins,
+  CheckCircle2,
+  Circle,
+  X,
   Plus,
-  Trash2,
   HeartHandshake,
   Landmark,
   PiggyBank,
@@ -19,17 +21,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { EmptyState, MoneyInput, StatCard } from "@/components/common"
-import { formatMoney, formatPercent, monthLabel } from "@/lib/calc"
+import { formatMoney, formatPercent, monthLabel, paymentProgress } from "@/lib/calc"
 
 export function Dashboard({
   data,
@@ -37,11 +30,9 @@ export function Dashboard({
   month,
   onArchive,
   onGoTo,
-  onToggleTransfer,
+  onAddPayment,
+  onRemovePayment,
   onClearMonth,
-  onAddDebt,
-  onUpdateDebt,
-  onRemoveDebt,
 }) {
   const s = data.settings
   const money = (v) => formatMoney(v, s)
@@ -50,9 +41,17 @@ export function Dashboard({
   const jointTransfers = result.transfers.filter((t) => t.toJoint)
   const peerTransfers = result.transfers.filter((t) => !t.toJoint)
 
-  const done = data.done[month] || {}
-  const doneCount = result.transfers.filter((t) => done[t.id]).length
-  const allDone = result.transfers.length > 0 && doneCount === result.transfers.length
+  const progress = paymentProgress(result.transfers, data.payments, month)
+  const allDone = progress.complete
+  const lineProps = (t) => ({
+    key: t.id,
+    transfer: t,
+    settings: s,
+    jointName,
+    progress: progress.byTransfer[t.id],
+    onAdd: (amount) => onAddPayment(month, t.id, amount),
+    onRemove: onRemovePayment,
+  })
 
   return (
     <div className="flex flex-col gap-5">
@@ -105,17 +104,17 @@ export function Dashboard({
             <div>
               <CardTitle className="flex items-center gap-2 text-base">
                 <ArrowRight className="size-4 text-primary" />
-                Les virements du début de mois
+                Les virements du mois
               </CardTitle>
               <CardDescription>
                 {monthLabel(month, s.locale)} · qui envoie quoi, et à qui
               </CardDescription>
             </div>
             <div className="flex items-center gap-1.5">
-              {doneCount > 0 ? (
+              {progress.count > 0 ? (
                 <Button size="sm" variant="ghost" onClick={() => onClearMonth(month)}>
                   <RotateCcw />
-                  Tout décocher
+                  Tout remettre à zéro
                 </Button>
               ) : null}
               <Button size="sm" variant="outline" onClick={() => onArchive(month)}>
@@ -145,7 +144,7 @@ export function Dashboard({
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-center gap-3">
                 <Progress
-                  value={(doneCount / result.transfers.length) * 100}
+                  value={progress.due > 0 ? (progress.covered / progress.due) * 100 : 0}
                   className="h-1.5 min-w-0 flex-1"
                   indicatorClassName={allDone ? "bg-success" : undefined}
                 />
@@ -155,8 +154,7 @@ export function Dashboard({
                     allDone ? "text-success" : "text-muted-foreground"
                   )}
                 >
-                  {doneCount} sur {result.transfers.length} fait
-                  {doneCount > 1 ? "s" : ""}
+                  {money(progress.covered)} sur {money(progress.due)} viré
                 </span>
               </div>
 
@@ -166,14 +164,7 @@ export function Dashboard({
                     Vers le {jointName.toLowerCase()}
                   </p>
                   {jointTransfers.map((t) => (
-                    <TransferLine
-                      key={t.id}
-                      transfer={t}
-                      settings={s}
-                      jointName={jointName}
-                      done={done[t.id]}
-                      onToggle={() => onToggleTransfer(month, t.id, t.amount)}
-                    />
+                    <TransferLine {...lineProps(t)} />
                   ))}
                 </div>
               ) : null}
@@ -184,29 +175,24 @@ export function Dashboard({
                     Entre vous : charges avancées sur un compte perso et remboursements ponctuels
                   </p>
                   {peerTransfers.map((t) => (
-                    <TransferLine
-                      key={t.id}
-                      transfer={t}
-                      settings={s}
-                      jointName={jointName}
-                      done={done[t.id]}
-                      onToggle={() => onToggleTransfer(month, t.id, t.amount)}
-                    />
+                    <TransferLine {...lineProps(t)} />
                   ))}
+                </div>
+              ) : null}
+
+              {progress.orphans.length ? (
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Virements notés qui ne correspondent plus à une ligne (les montants ont changé
+                    de sens)
+                  </p>
+                  <PaymentChips payments={progress.orphans} settings={s} onRemove={onRemovePayment} />
                 </div>
               ) : null}
             </div>
           )}
         </CardContent>
       </Card>
-
-      <DebtsCard
-        data={data}
-        month={month}
-        onAdd={onAddDebt}
-        onUpdate={onUpdateDebt}
-        onRemove={onRemoveDebt}
-      />
 
       <div className="grid gap-3 lg:grid-cols-2">
         {result.people.map((p) => (
@@ -237,146 +223,146 @@ export function Dashboard({
   )
 }
 
-function DebtsCard({ data, month, onAdd, onUpdate, onRemove }) {
-  const s = data.settings
-  const debts = data.debts.filter((d) => d.month === month)
-  const canAdd = data.people.length >= 2
-  const personSelect = (value, onChange) => (
-    <Select value={value || ""} onValueChange={onChange}>
-      <SelectTrigger>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {data.people.map((p) => (
-          <SelectItem key={p.id} value={p.id}>
-            {p.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <HandCoins className="size-4 text-primary" />
-              Remboursements ponctuels
-            </CardTitle>
-            <CardDescription>
-              {monthLabel(month, s.locale)} · une somme due à l'autre pour ce mois seulement,
-              ajoutée au virement entre vous.
-            </CardDescription>
-          </div>
-          <Button size="sm" variant="outline" disabled={!canAdd} onClick={() => onAdd({ month })}>
-            <Plus />
-            Ajouter
-          </Button>
-        </div>
-      </CardHeader>
-      {debts.length ? (
-        <CardContent className="flex flex-col gap-2.5">
-          {debts.map((d) => (
-            <div
-              key={d.id}
-              className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1fr_auto_1fr_2fr_8rem_auto]"
-            >
-              {personSelect(d.from, (v) => onUpdate(d.id, { from: v }))}
-              <span className="text-xs text-muted-foreground">doit à</span>
-              {personSelect(d.to, (v) => onUpdate(d.id, { to: v }))}
-              <Input
-                value={d.label}
-                onChange={(e) => onUpdate(d.id, { label: e.target.value })}
-                placeholder="Pour quoi ?"
-                className="col-span-3 sm:col-span-1"
-              />
-              <div className="col-span-2 sm:col-span-1">
-                <MoneyInput
-                  value={d.amount}
-                  currency={s.currency}
-                  onChange={(v) => onUpdate(d.id, { amount: v })}
-                />
-              </div>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                className="justify-self-end text-muted-foreground hover:text-destructive"
-                onClick={() => onRemove(d.id)}
-                aria-label="Supprimer"
-              >
-                <Trash2 />
-              </Button>
-              {d.from === d.to ? (
-                <p className="col-span-full text-[11px] text-destructive">
-                  Choisis deux personnes différentes.
-                </p>
-              ) : null}
-            </div>
-          ))}
-        </CardContent>
-      ) : null}
-    </Card>
-  )
-}
-
-function TransferLine({ transfer: t, settings, jointName, done, onToggle }) {
+function TransferLine({ transfer: t, settings, jointName, progress: p, onAdd, onRemove }) {
   const money = (v) => formatMoney(v, settings)
+  const [draft, setDraft] = React.useState(0)
   const netted = !t.toJoint && t.counterGross > 0.005
-  const drifted = done && Math.abs(done.amount - t.amount) > 0.005
+  const ratio = t.amount > 0 ? Math.min(1, p.paid / t.amount) : 0
+  const submit = () => {
+    if (draft > 0) {
+      onAdd(draft)
+      setDraft(0)
+    }
+  }
+
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-3 rounded-lg border px-3 py-3 transition-colors",
-        done ? "border-success/30 bg-success/[0.06]" : "border-border bg-background/60"
+        "flex flex-col gap-3 rounded-lg border px-3 py-3 transition-colors",
+        p.complete ? "border-success/30 bg-success/[0.06]" : "border-border bg-background/60"
       )}
     >
-      <Checkbox
-        checked={Boolean(done)}
-        onCheckedChange={onToggle}
-        aria-label={`Marquer le virement de ${t.fromName} comme fait`}
-      />
-      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm">
-        <span className={cn("font-medium", done && "text-muted-foreground")}>{t.fromName}</span>
-        <ArrowRight className="size-3.5 shrink-0 text-primary" />
-        {t.toJoint ? (
-          <span className="inline-flex items-center gap-1.5 font-medium">
-            <Landmark className="size-3.5 text-muted-foreground" />
-            {jointName}
-          </span>
+      <div className="flex flex-wrap items-center gap-3">
+        {p.complete ? (
+          <CheckCircle2 className="size-4 shrink-0 text-success" />
         ) : (
-          <span className="inline-flex items-center gap-1.5 font-medium">
-            <UserRound className="size-3.5 text-muted-foreground" />
-            {t.toName}
-          </span>
+          <Circle className="size-4 shrink-0 text-muted-foreground" />
         )}
-        {netted ? (
-          <Badge variant="outline">
-            {money(t.gross)} − {money(t.counterGross)}
-          </Badge>
-        ) : null}
-        {done ? (
-          <Badge variant="success">
-            fait le{" "}
-            {new Date(done.at).toLocaleDateString(settings.locale || "fr-FR", {
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm">
+          <span className="font-medium">{t.fromName}</span>
+          <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+          {t.toJoint ? (
+            <span className="inline-flex items-center gap-1.5 font-medium">
+              <Landmark className="size-3.5 text-muted-foreground" />
+              {jointName}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 font-medium">
+              <UserRound className="size-3.5 text-muted-foreground" />
+              {t.toName}
+            </span>
+          )}
+          {netted ? (
+            <Badge variant="outline">
+              {money(t.gross)} − {money(t.counterGross)}
+            </Badge>
+          ) : null}
+          {p.extra > 0.005 ? <Badge variant="success">+{money(p.extra)} en plus</Badge> : null}
+        </span>
+        <span className="text-base font-semibold tabular-nums">{money(t.amount)}</span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Progress
+          value={ratio * 100}
+          className="h-1.5 min-w-0 flex-1"
+          indicatorClassName={p.complete ? "bg-success" : undefined}
+        />
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {money(p.paid)} viré
+          {p.remaining > 0.005 ? ` · reste ${money(p.remaining)}` : ""}
+        </span>
+      </div>
+
+      {p.list.length ? (
+        <PaymentChips payments={p.list} settings={settings} onRemove={onRemove} />
+      ) : null}
+
+      {!p.complete ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-32">
+            <MoneyInput
+              key={p.list.length}
+              value={draft}
+              currency={settings.currency}
+              onChange={setDraft}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submit()
+              }}
+              placeholder="Montant"
+              aria-label="Montant viré"
+            />
+          </div>
+          <Button size="sm" variant="outline" disabled={!(draft > 0)} onClick={submit}>
+            <Plus />
+            Noter un virement
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => onAdd(p.remaining)}>
+            <CheckCircle2 />
+            Tout payé ({money(p.remaining)})
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-32">
+            <MoneyInput
+              key={p.list.length}
+              value={draft}
+              currency={settings.currency}
+              onChange={setDraft}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submit()
+              }}
+              placeholder="En plus"
+              aria-label="Montant viré en plus"
+            />
+          </div>
+          <Button size="sm" variant="ghost" disabled={!(draft > 0)} onClick={submit}>
+            <Plus />
+            Noter un virement en plus
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PaymentChips({ payments, settings, onRemove }) {
+  const money = (v) => formatMoney(v, settings)
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {payments.map((pay) => (
+        <span
+          key={pay.id}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card py-0.5 pr-0.5 pl-2 text-xs tabular-nums"
+        >
+          <span className="text-muted-foreground">
+            {new Date(pay.at).toLocaleDateString(settings.locale || "fr-FR", {
               day: "numeric",
               month: "short",
             })}
-          </Badge>
-        ) : null}
-        {drifted ? (
-          <Badge variant="destructive">coché pour {money(done.amount)}</Badge>
-        ) : null}
-      </span>
-      <span
-        className={cn(
-          "text-base font-semibold tabular-nums",
-          done ? "text-muted-foreground line-through" : "text-primary"
-        )}
-      >
-        {money(t.amount)}
-      </span>
+          </span>
+          <span className="font-medium">{money(pay.amount)}</span>
+          <button
+            type="button"
+            onClick={() => onRemove(pay.id)}
+            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+            aria-label="Supprimer ce virement"
+          >
+            <X className="size-3" />
+          </button>
+        </span>
+      ))}
     </div>
   )
 }
