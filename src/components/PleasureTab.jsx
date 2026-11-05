@@ -1,9 +1,14 @@
-import { HeartHandshake, Plus, Sparkles } from "lucide-react"
+import { Plus, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { EmptyState, StatCard } from "@/components/common"
 import { ItemRow } from "@/components/ItemRow"
-import { REIMBURSEMENT, formatMoney, formatPercent, monthLabel } from "@/lib/calc"
+import {
+  REIMBURSEMENT,
+  currentMonthKey,
+  formatMoney,
+  isReimbursement,
+  monthLabel,
+  num,
+} from "@/lib/calc"
 
 const PRESETS = [
   { label: "Resto", category: "Restos" },
@@ -15,120 +20,72 @@ const PRESETS = [
   { label: "Remboursement", category: REIMBURSEMENT },
 ]
 
-export function PleasureTab({
-  data,
-  result,
-  month,
-  openId,
-  onAdd,
-  onUpdate,
-  onRemove,
-}) {
+export function PleasureTab({ data, openId, onAdd, onUpdate, onRemove }) {
   const s = data.settings
-  const jointName = s.jointAccountName || "Compte joint"
-  const items = data.budgets.filter((b) => b.month === month)
+  const now = currentMonthKey()
+  const months = [...new Set([now, ...data.budgets.map((b) => b.month)])].sort().reverse()
   const [first, second] = data.people
-  const presetOf = (p) =>
+  const presetOf = (p, month) =>
     p.category === REIMBURSEMENT
       ? { ...p, month, from: first?.id, to: second?.id }
       : { ...p, month }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold">
-            Ponctuel · {monthLabel(month, s.locale)}
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Ce qui ne compte que pour ce mois : les plaisirs communs et les remboursements entre
-            vous. Ce qui revient chaque mois va dans les charges.
-          </p>
-        </div>
-        <Button size="sm" onClick={() => onAdd({ month })}>
-          <Plus />
-          Ajouter
-        </Button>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard
-          label="Total des plaisirs"
-          value={formatMoney(result.pleasureTotal, s)}
-          hint="ce mois-ci"
-          icon={HeartHandshake}
-          tone="primary"
-        />
-        <StatCard
-          label="Part dans le commun"
-          value={
-            result.poolTotal > 0
-              ? formatPercent(result.pleasureTotal / result.poolTotal)
-              : "0 %"
-          }
-          hint="charges + plaisirs"
-        />
-        <StatCard
-          label="Part des revenus"
-          value={
-            result.totalIncome > 0
-              ? formatPercent(result.pleasureTotal / result.totalIncome)
-              : "0 %"
-          }
-          hint="revenus du foyer"
-        />
-      </div>
-
-      {items.length === 0 ? (
-        <EmptyState
-          icon={HeartHandshake}
-          title="Rien de ponctuel ce mois-ci"
-          description="Un resto, un week-end, un cadeau commun, ou un remboursement entre vous : ça compte seulement pour ce mois."
-          action={
-            <div className="flex flex-wrap justify-center gap-2">
-              {PRESETS.map((p) => (
-                <Button
-                  key={p.label}
-                  size="sm"
-                  variant="outline"
-                  onClick={() => onAdd(presetOf(p))}
-                >
-                  <Sparkles />
-                  {p.label}
-                </Button>
-              ))}
+    <div className="flex flex-col gap-10">
+      {months.map((month) => {
+        const items = data.budgets.filter((b) => b.month === month)
+        const total = items
+          .filter((b) => b.active !== false && !isReimbursement(b))
+          .reduce((sum, b) => sum + num(b.amount), 0)
+        return (
+          <section key={month} className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                Ponctuel · {monthLabel(month, s.locale)}
+                <span className="text-xs font-normal text-muted-foreground tabular-nums">
+                  {formatMoney(total, s)}
+                </span>
+              </h2>
+              <Button size="sm" onClick={() => onAdd({ month })}>
+                <Plus />
+                Ajouter
+              </Button>
             </div>
-          }
-        />
-      ) : (
-        <div className="flex flex-col gap-2.5">
-          {items.map((budget) => (
-            <ItemRow
-              key={budget.id}
-              item={budget}
-              defaultOpen={budget.id === openId}
-              people={data.people}
-              settings={s}
-              computed={result.items.find((i) => i.id === budget.id)}
-              onUpdate={(patch) => onUpdate(budget.id, patch)}
-              onRemove={() => onRemove(budget.id)}
-            />
-          ))}
-        </div>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Comment ça marche</CardTitle>
-          <CardDescription>Un plaisir se partage comme une charge, mais pour un seul mois.</CardDescription>
-        </CardHeader>
-        <CardContent className="text-xs leading-relaxed text-muted-foreground">
-          <p>plaisir créé en novembre → compté en novembre seulement</p>
-          <p>payé par le {jointName.toLowerCase()} → ajouté au virement vers le {jointName.toLowerCase()}</p>
-          <p>avancé par l'un de vous → l'autre lui rembourse sa part</p>
-          <p>catégorie « Remboursement » → pas partagé : ajouté au virement entre vous</p>
-        </CardContent>
-      </Card>
+            {items.length ? (
+              <div className="flex flex-col gap-2.5">
+                {items.map((budget) => (
+                  <ItemRow
+                    key={budget.id}
+                    item={budget}
+                    defaultOpen={budget.id === openId}
+                    people={data.people}
+                    settings={s}
+                    onUpdate={(patch) => onUpdate(budget.id, patch)}
+                    onRemove={() => onRemove(budget.id)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-6 text-center">
+                <p className="text-xs text-muted-foreground">Rien de ponctuel ce mois-ci.</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {PRESETS.map((p) => (
+                    <Button
+                      key={p.label}
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onAdd(presetOf(p, month))}
+                    >
+                      <Sparkles />
+                      {p.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )
+      })}
     </div>
   )
 }

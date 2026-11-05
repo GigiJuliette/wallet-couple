@@ -1,9 +1,7 @@
 import * as React from "react";
 import {
   ChartNoAxesColumn,
-  ChevronLeft,
   ClipboardCheck,
-  ChevronRight,
   HeartHandshake,
   History,
   LayoutDashboard,
@@ -12,44 +10,40 @@ import {
   Receipt,
   Settings,
   Sun,
-  UserRound,
   Wallet,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Dashboard } from "@/components/Dashboard";
 import { PeopleTab } from "@/components/PeopleTab";
 import { ChargesTab } from "@/components/ChargesTab";
 import { PleasureTab } from "@/components/PleasureTab";
-import { PersonalTab } from "@/components/PersonalTab";
 import { SavingsTab } from "@/components/SavingsTab";
 import { HistoryTab } from "@/components/HistoryTab";
 import { SettingsTab } from "@/components/SettingsTab";
 import { BilanTab } from "@/components/BilanTab";
 import { useWallet } from "@/hooks/useWallet";
-import { currentMonthKey, monthLabel } from "@/lib/calc";
-
-function shiftMonth(key, delta) {
-  const [y, m] = key.split("-").map(Number);
-  const d = new Date(y, m - 1 + delta, 1);
-  return currentMonthKey(d);
-}
+import { currentMonthKey, shiftMonth } from "@/lib/calc";
 
 export default function App() {
   const [month, setMonth] = React.useState(() => currentMonthKey());
   const wallet = useWallet(month);
   const { data, result } = wallet;
   const [tab, setTab] = React.useState("dashboard");
-  const oneOffCount = data.budgets.filter((b) => b.month === month).length;
+
+  const personal = {
+    onAdd: wallet.addPersonal,
+    onUpdate: wallet.updatePersonal,
+    onRemove: wallet.removePersonal,
+    onDuplicate: wallet.duplicatePersonal,
+  };
 
   const dark = data.settings.theme === "dark";
   const tabs = [
     { value: "dashboard", icon: LayoutDashboard, label: "Vue du mois" },
-    { value: "charges", icon: Receipt, label: "Charges", count: data.charges.filter((c) => !c.variable).length },
-    { value: "variables", icon: ChartNoAxesColumn, label: "Variables", count: data.charges.filter((c) => c.variable).length },
-    { value: "pleasure", icon: HeartHandshake, label: "Ponctuel", count: oneOffCount },
-    { value: "personal", icon: UserRound, label: "Perso", count: data.personal.length },
+    { value: "charges", icon: Receipt, label: "Fixes" },
+    { value: "variables", icon: ChartNoAxesColumn, label: "Variables" },
+    { value: "pleasure", icon: HeartHandshake, label: "Ponctuel" },
     { value: "bilan", icon: ClipboardCheck, label: "Bilan" },
     { value: "savings", icon: PiggyBank, label: "Cagnotte" },
     { value: "history", icon: History, label: "Historique" },
@@ -74,33 +68,6 @@ export default function App() {
             </div>
           </div>
           <div className="ml-auto flex items-center gap-1.5">
-            <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5">
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                onClick={() => {
-                  wallet.clearLastAdded();
-                  setMonth((m) => shiftMonth(m, -1));
-                }}
-                aria-label="Mois précédent"
-              >
-                <ChevronLeft />
-              </Button>
-              <span className="min-w-[7.5rem] px-1 text-center text-xs font-medium">
-                {monthLabel(month, data.settings.locale)}
-              </span>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                onClick={() => {
-                  wallet.clearLastAdded();
-                  setMonth((m) => shiftMonth(m, 1));
-                }}
-                aria-label="Mois suivant"
-              >
-                <ChevronRight />
-              </Button>
-            </div>
             <Button
               size="icon"
               variant="outline"
@@ -125,7 +92,7 @@ export default function App() {
           className="flex flex-col gap-5"
         >
           <TabsList className="flex w-full gap-0.5 lg:inline-flex lg:w-auto lg:gap-1">
-            {tabs.map(({ value, icon: Icon, label, count }) => (
+            {tabs.map(({ value, icon: Icon, label }) => (
               <TabsTrigger
                 key={value}
                 value={value}
@@ -136,11 +103,6 @@ export default function App() {
                 <span className="hidden truncate sm:group-data-[state=active]:inline lg:inline">
                   {label}
                 </span>
-                {count ? (
-                  <Badge variant="secondary" className="ml-0.5 hidden lg:inline-flex">
-                    {count}
-                  </Badge>
-                ) : null}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -152,6 +114,10 @@ export default function App() {
               month={month}
               onArchive={wallet.archiveMonth}
               onGoTo={setTab}
+              onShiftMonth={(delta) => {
+                wallet.clearLastAdded();
+                setMonth((m) => shiftMonth(m, delta));
+              }}
               onAddPayment={wallet.addPayment}
               onRemovePayment={wallet.removePayment}
               onClearMonth={wallet.clearMonthPayments}
@@ -167,6 +133,8 @@ export default function App() {
               onUpdate={wallet.updateCharge}
               onRemove={wallet.removeCharge}
               onDuplicate={wallet.duplicateCharge}
+              onMakeOneOff={wallet.moveChargeToOneOff}
+              personal={personal}
             />
           </TabsContent>
 
@@ -180,14 +148,14 @@ export default function App() {
               onUpdate={wallet.updateCharge}
               onRemove={wallet.removeCharge}
               onDuplicate={wallet.duplicateCharge}
+              onMakeOneOff={wallet.moveChargeToOneOff}
+              personal={personal}
             />
           </TabsContent>
 
           <TabsContent value="pleasure">
             <PleasureTab
               data={data}
-              result={result}
-              month={month}
               openId={wallet.lastAdded}
               onAdd={wallet.addBudget}
               onUpdate={wallet.updateBudget}
@@ -195,20 +163,8 @@ export default function App() {
             />
           </TabsContent>
 
-          <TabsContent value="personal">
-            <PersonalTab
-              data={data}
-              result={result}
-              openId={wallet.lastAdded}
-              onAdd={wallet.addPersonal}
-              onUpdate={wallet.updatePersonal}
-              onRemove={wallet.removePersonal}
-              onDuplicate={wallet.duplicatePersonal}
-            />
-          </TabsContent>
-
           <TabsContent value="bilan">
-            <BilanTab data={data} month={month} onSetActual={wallet.setActual} />
+            <BilanTab data={data} onSetActual={wallet.setActual} />
           </TabsContent>
 
           <TabsContent value="savings">
@@ -225,8 +181,6 @@ export default function App() {
           <TabsContent value="history">
             <HistoryTab
               data={data}
-              month={month}
-              onArchive={wallet.archiveMonth}
               onRemove={wallet.removeHistory}
               onRestore={wallet.restoreHistory}
             />

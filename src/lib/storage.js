@@ -198,8 +198,9 @@ export function normalizeData(raw) {
         month,
         Object.fromEntries(
           Object.entries(bucket)
-            .filter(([, v]) => v !== null && v !== "" && Number.isFinite(num(v)))
-            .map(([id, v]) => [id, num(v)])
+            .map(([id, v]) => [id, v && typeof v === "object" ? v : { real: v }])
+            .filter(([, v]) => v.real != null && v.real !== "" && Number.isFinite(num(v.real)))
+            .map(([id, v]) => [id, { ...v, real: num(v.real) }])
         ),
       ])
   )

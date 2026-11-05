@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { EmptyState, Field, MoneyInput, StatCard } from "@/components/common"
+import { EmptyState, Field, MoneyInput } from "@/components/common"
 import { cn } from "@/lib/utils"
 import { currentMonthKey, formatMoney, monthLabel } from "@/lib/calc"
 
@@ -32,50 +32,17 @@ export function SavingsTab({ data, result, month, onAdd, onUpdate, onRemove }) {
   const savings = result.savings
   const options = React.useMemo(() => monthOptions(month), [month])
 
-  const thisMonth = savings.months.find((x) => x.month === month)
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Cagnotte</h2>
-          <p className="text-xs text-muted-foreground">
-            Notez ce que vous mettez de côté chaque mois. Le total monte tout seul.
-          </p>
         </div>
         <Button size="sm" onClick={() => onAdd({ month })}>
           <Plus />
           Ajouter un versement
         </Button>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Total de la cagnotte"
-          value={money(savings.total)}
-          hint={
-            savings.monthCount
-              ? `${savings.monthCount} mois alimenté${savings.monthCount > 1 ? "s" : ""}`
-              : "aucun versement"
-          }
-          icon={PiggyBank}
-          tone="success"
-        />
-        <StatCard
-          label={`Mis de côté en ${monthLabel(month, s.locale).toLowerCase()}`}
-          value={money(thisMonth?.net || 0)}
-          hint={thisMonth ? "somme des lignes du mois" : "rien pour ce mois-ci"}
-        />
-        <StatCard
-          label="Total versé"
-          value={money(savings.deposited)}
-          hint={savings.withdrawn > 0 ? `dont ${money(savings.withdrawn)} ressortis` : "aucun retrait"}
-        />
-        <StatCard
-          label="Moyenne par mois"
-          value={money(savings.averagePerMonth)}
-          hint="sur les mois alimentés"
-        />
       </div>
 
       {savings.months.length > 1 ? (

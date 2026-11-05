@@ -25,9 +25,6 @@ export function PeopleTab({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Revenus</h2>
-          <p className="text-xs text-muted-foreground">
-            C'est cette base qui décide du pourcentage de chacun.
-          </p>
         </div>
         <Button size="sm" onClick={onAdd}>
           <Plus />
@@ -115,7 +112,7 @@ export function PeopleTab({
                       <p className="text-xs font-medium">À retirer du calcul</p>
                       <p className="text-[11px] text-muted-foreground">
                         {deductLines.length
-                          ? `${formatMoney(computed?.deduction || 0, s)} par mois, aussi visibles dans Perso`
+                          ? `${formatMoney(computed?.deduction || 0, s)} par mois, aussi visibles dans Fixes`
                           : "un prêt, un crédit… payé chaque mois"}
                       </p>
                     </div>

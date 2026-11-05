@@ -1,19 +1,18 @@
 import * as React from "react"
 import {
+  ChevronLeft,
+  ChevronRight,
   ArrowRight,
-  Banknote,
   CheckCircle2,
   Circle,
   X,
   Plus,
-  HeartHandshake,
   Landmark,
   PiggyBank,
   Receipt,
   RotateCcw,
   Save,
   UserRound,
-  Wallet,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,7 +20,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
-import { EmptyState, MoneyInput, StatCard } from "@/components/common"
+import { EmptyState, MoneyInput } from "@/components/common"
 import { formatMoney, formatPercent, monthLabel, paymentProgress } from "@/lib/calc"
 
 export function Dashboard({
@@ -30,6 +29,7 @@ export function Dashboard({
   month,
   onArchive,
   onGoTo,
+  onShiftMonth,
   onAddPayment,
   onRemovePayment,
   onClearMonth,
@@ -55,47 +55,26 @@ export function Dashboard({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <StatCard
-          label="Revenus nets du foyer"
-          value={money(result.totalIncome)}
-          hint={`${data.people.length} personne${data.people.length > 1 ? "s" : ""}`}
-          icon={Banknote}
-        />
-        <StatCard
-          label="Charges communes"
-          value={money(result.chargesTotal)}
-          hint="ramené au mois"
-          icon={Receipt}
-        />
-        <StatCard
-          label="Plaisirs communs"
-          value={money(result.pleasureTotal)}
-          hint="dépenses du mois"
-          icon={HeartHandshake}
-        />
-        <StatCard
-          label="Total à couvrir"
-          value={money(result.poolTotal)}
-          hint={
-            result.totalIncome > 0
-              ? `${formatPercent(result.poolTotal / result.totalIncome)} des revenus`
-              : "renseignez vos revenus"
-          }
-          icon={Wallet}
-          tone="primary"
-        />
-        <StatCard
-          label="Cagnotte"
-          value={money(result.savings.total)}
-          hint={
-            result.savings.monthCount
-              ? `mis de côté sur ${result.savings.monthCount} mois`
-              : "aucun versement enregistré"
-          }
-          icon={PiggyBank}
-          tone="success"
-        />
+      <div className="flex items-center gap-0.5 self-start rounded-lg border border-border bg-card p-0.5">
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          onClick={() => onShiftMonth(-1)}
+          aria-label="Mois précédent"
+        >
+          <ChevronLeft />
+        </Button>
+        <span className="min-w-[7.5rem] px-1 text-center text-xs font-medium">
+          {monthLabel(month, s.locale)}
+        </span>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          onClick={() => onShiftMonth(1)}
+          aria-label="Mois suivant"
+        >
+          <ChevronRight />
+        </Button>
       </div>
 
       <Card className="overflow-hidden border-primary/25">
@@ -151,7 +130,7 @@ export function Dashboard({
                 <span
                   className={cn(
                     "text-xs font-medium tabular-nums",
-                    allDone ? "text-success" : "text-muted-foreground"
+                    allDone ? "text-success" : "text-muted-foreground",
                   )}
                 >
                   {money(progress.covered)} sur {money(progress.due)} viré
@@ -186,7 +165,11 @@ export function Dashboard({
                     Virements notés qui ne correspondent plus à une ligne (les montants ont changé
                     de sens)
                   </p>
-                  <PaymentChips payments={progress.orphans} settings={s} onRemove={onRemovePayment} />
+                  <PaymentChips
+                    payments={progress.orphans}
+                    settings={s}
+                    onRemove={onRemovePayment}
+                  />
                 </div>
               ) : null}
             </div>
@@ -239,7 +222,7 @@ function TransferLine({ transfer: t, settings, jointName, progress: p, onAdd, on
     <div
       className={cn(
         "flex flex-col gap-3 rounded-lg border px-3 py-3 transition-colors",
-        p.complete ? "border-success/30 bg-success/[0.06]" : "border-border bg-background/60"
+        p.complete ? "border-success/30 bg-success/[0.06]" : "border-border bg-background/60",
       )}
     >
       <div className="flex flex-wrap items-center gap-3">
@@ -385,11 +368,7 @@ function PersonSummary({ person: p, settings, jointName }) {
         <Row label="Sa part du commun" value={money(p.due)} strong />
         <Row label="Ce qu'il avance sur son compte perso" value={money(p.paidDirect)} />
         <Separator />
-        <Row
-          label={`À virer vers le ${jointName.toLowerCase()}`}
-          value={money(p.toJoint)}
-          accent
-        />
+        <Row label={`À virer vers le ${jointName.toLowerCase()}`} value={money(p.toJoint)} accent />
         {p.owesToOthers > 0.005 ? (
           <Row label="À rembourser à l'autre" value={money(p.owesToOthers)} accent />
         ) : null}

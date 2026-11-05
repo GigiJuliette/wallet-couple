@@ -1,169 +1,155 @@
 import * as React from "react"
-import { ClipboardCheck } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { CategoryIcon, EmptyState, StatCard } from "@/components/common"
+import { CategoryIcon } from "@/components/common"
+import { categoryColor } from "@/lib/categories"
+import { bilanLines, signed, summarize } from "@/lib/bilan"
 import {
   PERSON_COLORS,
   currencySymbol,
+  currentMonthKey,
   formatMoney,
   monthLabel,
   num,
-  round2,
-  toMonthly,
+  shiftMonth,
 } from "@/lib/calc"
 import { cn } from "@/lib/utils"
 
-export function BilanTab({ data, month, onSetActual }) {
-  const s = data.settings
-  const money = (v) => formatMoney(v, s)
-  const actuals = data.actuals[month] || {}
-
-  const toLine = (item) => {
-    const planned = round2(toMonthly(item.amount, item.frequency))
-    const real = item.id in actuals ? actuals[item.id] : null
-    return { item, planned, real, diff: real === null ? null : round2(real - planned) }
-  }
-
-  const groups = [
-    {
-      id: "commun",
-      title: "Commun",
-      lines: data.charges.filter((c) => c.variable && c.active !== false).map(toLine),
-    },
-    ...data.people.map((p, index) => ({
-      id: p.id,
-      title: p.name,
-      color: p.color || PERSON_COLORS[index % PERSON_COLORS.length],
-      lines: data.personal
-        .filter((i) => i.variable && i.active !== false && i.owner === p.id)
-        .map(toLine),
-    })),
-  ].filter((g) => g.lines.length)
-
-  const all = groups.flatMap((g) => g.lines)
-  const filled = all.filter((l) => l.real !== null)
-  const totals = summarize(all)
+export function BilanTab({ data, onSetActual }) {
+  const now = currentMonthKey()
+  const months = [
+    ...new Set([now, shiftMonth(now, -1), ...Object.keys(data.actuals).filter((m) => m <= now)]),
+  ]
+    .sort()
+    .reverse()
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-sm font-semibold">Bilan · {monthLabel(month, s.locale)}</h2>
-        <p className="text-xs text-muted-foreground">
-          Pour chaque charge variable, note ce que vous avez réellement payé ce mois-ci.
-        </p>
-      </div>
-
-      {all.length === 0 ? (
-        <EmptyState
-          icon={ClipboardCheck}
-          title="Aucune charge variable"
-          description="Ajoutez des charges dans l'onglet Variables, ou passez une charge perso en variable : elles apparaîtront ici."
+    <div className="flex flex-col gap-10">
+      {months.map((month) => (
+        <BilanMonth
+          key={month}
+          data={data}
+          month={month}
+          frozen={month < now}
+          onSetActual={onSetActual}
         />
-      ) : (
-        <>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <StatCard label="Prévu" value={money(totals.planned)} hint="toutes les variables" />
-            <StatCard
-              label="Réellement payé"
-              value={money(totals.real)}
-              hint={`${filled.length} ligne${filled.length > 1 ? "s" : ""} remplie${filled.length > 1 ? "s" : ""} sur ${all.length}`}
-            />
-            <StatCard
-              label="Écart"
-              value={filled.length ? signed(totals.diff, money) : "—"}
-              hint={filled.length ? diffHint(totals.diff) : "rien de rempli"}
-              tone={!filled.length ? "default" : totals.diff > 0.005 ? "default" : "success"}
-            />
-          </div>
-
-          {groups.map((g) => {
-            const sub = summarize(g.lines)
-            return (
-              <Card key={g.id}>
-                <CardHeader>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2">
-                      {g.color ? (
-                        <span className="size-2.5 rounded-full" style={{ background: g.color }} />
-                      ) : null}
-                      {g.title}
-                    </CardTitle>
-                    <CardDescription className="tabular-nums">
-                      prévu {money(sub.planned)}
-                      {sub.count ? ` · réel ${money(sub.real)} · ${signed(sub.diff, money)}` : ""}
-                    </CardDescription>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex flex-col divide-y divide-border">
-                  {g.lines.map((l) => (
-                    <div
-                      key={l.item.id}
-                      className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1.5 py-2.5 sm:grid-cols-[1fr_7rem_8rem_8rem]"
-                    >
-                      <span className="flex min-w-0 items-center gap-2 text-sm">
-                        <CategoryIcon name={l.item.category} />
-                        <span className="truncate font-medium">{l.item.label || "Sans nom"}</span>
-                      </span>
-                      <span className="text-right text-sm tabular-nums text-muted-foreground">
-                        <span className="sm:hidden">prévu </span>
-                        {money(l.planned)}
-                      </span>
-                      <ActualInput
-                        value={l.real}
-                        currency={s.currency}
-                        onChange={(v) => onSetActual(month, l.item.id, v)}
-                      />
-                      <span
-                        className={cn(
-                          "text-right text-xs tabular-nums",
-                          l.diff === null
-                            ? "text-muted-foreground"
-                            : l.diff > 0.005
-                              ? "font-medium text-destructive"
-                              : "font-medium text-success"
-                        )}
-                      >
-                        {l.diff === null ? "à remplir" : `${signed(l.diff, money)} ${diffHint(l.diff)}`}
-                      </span>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )
-          })}
-        </>
-      )}
+      ))}
     </div>
   )
 }
 
-function summarize(lines) {
-  const filled = lines.filter((l) => l.real !== null)
-  return {
-    planned: round2(lines.reduce((s, l) => s + l.planned, 0)),
-    real: round2(filled.reduce((s, l) => s + l.real, 0)),
-    diff: round2(filled.reduce((s, l) => s + l.diff, 0)),
-    count: filled.length,
+function BilanMonth({ data, month, frozen, onSetActual }) {
+  const s = data.settings
+  const money = (v) => formatMoney(v, s)
+  const lines = bilanLines(data, data.actuals[month], { frozen })
+
+  const section = (key, title, dot, own, emptyText) => {
+    const sub = summarize(own)
+    return (
+      <section key={key} className="flex flex-col gap-2.5">
+        <h3 className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-semibold">
+          {dot}
+          {title}
+          <span className="font-normal text-muted-foreground tabular-nums">
+            prévu {money(sub.planned)}
+            {sub.count ? ` · réel ${money(sub.real)} · ${signed(sub.diff, money)}` : ""}
+          </span>
+        </h3>
+        {own.length ? (
+          own.map((l) => (
+            <BilanLine
+              key={l.id}
+              line={l}
+              money={money}
+              currency={s.currency}
+              onChange={(v) =>
+                onSetActual(month, l.id, v, {
+                  planned: l.planned,
+                  label: l.label,
+                  category: l.category,
+                  owner: l.owner,
+                })
+              }
+            />
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+            {emptyText}
+          </div>
+        )}
+      </section>
+    )
   }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold">Bilan · {monthLabel(month, s.locale)}</h2>
+        {section(
+          "commun",
+          "Commun",
+          <span className="size-2.5 rounded-full bg-primary" />,
+          lines.filter((l) => l.owner === null),
+          "Aucune charge commune variable.",
+        )}
+      </div>
+
+      <div className="grid items-start gap-5 lg:grid-cols-2">
+        {data.people.map((p, index) =>
+          section(
+            p.id,
+            p.name,
+            <span
+              className="size-2.5 rounded-full"
+              style={{ background: p.color || PERSON_COLORS[index % PERSON_COLORS.length] }}
+            />,
+            lines.filter((l) => l.owner === p.id),
+            `Aucune charge perso variable pour ${p.name}.`,
+          ),
+        )}
+      </div>
+    </div>
+  )
 }
 
-function signed(value, money) {
-  if (Math.abs(value) <= 0.005) return money(0)
-  return `${value > 0 ? "+" : "−"}${money(Math.abs(value))}`
-}
-
-function diffHint(value) {
-  if (value > 0.005) return "dépassé"
-  if (value < -0.005) return "économisé"
-  return "pile"
+function BilanLine({ line, money, currency, onChange }) {
+  const { label, category, planned, real, diff } = line
+  const color = categoryColor(category)
+  return (
+    <div
+      className="@container flex min-h-11 items-center gap-2.5 rounded-xl border px-3 py-1.5 shadow-sm shadow-black/[0.03]"
+      style={{
+        background: `color-mix(in oklab, ${color} 7%, var(--card))`,
+        borderColor: `color-mix(in oklab, ${color} 25%, var(--border))`,
+      }}
+    >
+      <CategoryIcon name={category} />
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">{label || "Sans nom"}</span>
+      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+        <span className="hidden @md:inline">prévu </span>
+        {money(planned)}
+      </span>
+      <ActualInput value={real} currency={currency} onChange={onChange} />
+      <span
+        className={cn(
+          "w-16 shrink-0 text-right text-xs tabular-nums",
+          diff === null
+            ? "text-muted-foreground"
+            : diff > 0.005
+              ? "font-medium text-destructive"
+              : "font-medium text-success",
+        )}
+      >
+        {diff === null ? "—" : signed(diff, money)}
+      </span>
+    </div>
+  )
 }
 
 function ActualInput({ value, currency, onChange }) {
   const [draft, setDraft] = React.useState(null)
   const text = draft ?? (value === null ? "" : String(value))
   return (
-    <div className="relative">
+    <span className="relative shrink-0">
       <Input
         inputMode="decimal"
         value={text}
@@ -176,11 +162,11 @@ function ActualInput({ value, currency, onChange }) {
           setDraft(raw)
           onChange(raw === "" ? null : num(raw))
         }}
-        className="pr-8 text-right tabular-nums"
+        className="h-7 w-20 pr-5 pl-2 text-right text-xs tabular-nums"
       />
-      <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted-foreground">
+      <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-xs text-muted-foreground">
         {currencySymbol(currency)}
       </span>
-    </div>
+    </span>
   )
 }

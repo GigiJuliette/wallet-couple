@@ -113,6 +113,17 @@ export function useWallet(month) {
         setLastAdded(copyId)
       },
 
+      moveChargeToOneOff: (id) =>
+        update((d) => {
+          const c = d.charges.find((x) => x.id === id)
+          if (!c) return d
+          d.charges = d.charges.filter((x) => x.id !== id)
+          const budget = { ...c, id: uid("b"), month: currentMonthKey(), frequency: "monthly" }
+          delete budget.variable
+          d.budgets.unshift(budget)
+          return d
+        }),
+
       addBudget: (preset = {}) => {
         const id = uid("b")
         update((d) => {
@@ -242,11 +253,11 @@ export function useWallet(month) {
           return d
         }),
 
-      setActual: (month, itemId, amount) =>
+      setActual: (month, itemId, amount, meta = {}) =>
         update((d) => {
           const bucket = d.actuals[month] || {}
           if (amount === null) delete bucket[itemId]
-          else bucket[itemId] = amount
+          else bucket[itemId] = { ...meta, real: amount }
           if (Object.keys(bucket).length) d.actuals[month] = bucket
           else delete d.actuals[month]
           return d

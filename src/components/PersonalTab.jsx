@@ -1,18 +1,26 @@
-import { Plus, Sparkles, UserRound } from "lucide-react"
+import { Plus, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { StatCard } from "@/components/common"
 import { ItemRow } from "@/components/ItemRow"
-import { formatMoney, formatPercent, toMonthly } from "@/lib/calc"
+import { PERSON_COLORS, formatMoney, toMonthly } from "@/lib/calc"
 
 const PRESETS = ["Salle de sport", "Téléphone", "Abonnement musique", "Crédit voiture", "Mutuelle"]
+const VARIABLE_PRESETS = ["Shopping", "Sorties"]
 
-export function PersonalTab({ data, result, openId, onAdd, onUpdate, onRemove, onDuplicate }) {
+export function PersonalColumns({
+  data,
+  variable,
+  openId,
+  onAdd,
+  onUpdate,
+  onRemove,
+  onDuplicate,
+}) {
   const s = data.settings
-  const money = (v) => formatMoney(v, s)
-  const orphans = data.personal.filter((i) => !data.people.find((p) => p.id === i.owner))
-  const fixedTotal = (ownerId) =>
-    data.personal
-      .filter((i) => i.active !== false && !i.variable && (!ownerId || i.owner === ownerId))
+  const items = data.personal.filter((i) => Boolean(i.variable) === variable)
+  const orphans = items.filter((i) => !data.people.find((p) => p.id === i.owner))
+  const totalOf = (list) =>
+    list
+      .filter((i) => i.active !== false)
       .reduce((sum, i) => sum + toMonthly(i.amount, i.frequency), 0)
 
   const row = (item) => (
@@ -31,72 +39,43 @@ export function PersonalTab({ data, result, openId, onAdd, onUpdate, onRemove, o
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-sm font-semibold">Charges perso</h2>
-        <p className="text-xs text-muted-foreground">
-          Ce que chacun paie de son côté et qui n'est pas partagé. Les charges perso variables
-          sont marquées « variable » et se retrouvent dans le Bilan.
-        </p>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard
-          label="Total charges perso fixes"
-          value={money(fixedTotal())}
-          hint="tout le monde confondu"
-          icon={UserRound}
-          tone="primary"
-        />
-        {result.people.slice(0, 2).map((p) => (
-          <StatCard
-            key={p.id}
-            label={`Charges perso fixes de ${p.name}`}
-            value={money(fixedTotal(p.id))}
-            hint={
-              p.income > 0
-                ? `${formatPercent(fixedTotal(p.id) / p.income)} de son revenu`
-                : "revenu non renseigné"
-            }
-          />
-        ))}
-      </div>
-
       <div className="grid items-start gap-5 lg:grid-cols-2">
-        {data.people.map((person) => {
-          const items = data.personal.filter((i) => i.owner === person.id)
-          const computed = result.people.find((p) => p.id === person.id)
+        {data.people.map((person, index) => {
+          const own = items.filter((i) => i.owner === person.id)
           return (
             <div key={person.id} className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="flex items-center gap-2 text-xs font-semibold">
                   <span
                     className="size-2.5 rounded-full"
-                    style={{ background: computed?.color }}
+                    style={{
+                      background: person.color || PERSON_COLORS[index % PERSON_COLORS.length],
+                    }}
                   />
                   {person.name}
                   <span className="font-normal text-muted-foreground tabular-nums">
-                    {money(fixedTotal(person.id))} fixes / mois
+                    {formatMoney(totalOf(own), s)} / mois
                   </span>
                 </h3>
-                <Button size="sm" variant="outline" onClick={() => onAdd({ owner: person.id })}>
+                <Button size="sm" onClick={() => onAdd({ owner: person.id, variable })}>
                   <Plus />
                   Ajouter
                 </Button>
               </div>
-              {items.length ? (
-                items.map(row)
+              {own.length ? (
+                own.map(row)
               ) : (
                 <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-6 text-center">
                   <p className="text-xs text-muted-foreground">
-                    Aucune charge perso pour {person.name}.
+                    Aucune charge perso {variable ? "variable" : "fixe"} pour {person.name}.
                   </p>
                   <div className="flex flex-wrap justify-center gap-2">
-                    {PRESETS.map((label) => (
+                    {(variable ? VARIABLE_PRESETS : PRESETS).map((label) => (
                       <Button
                         key={label}
                         size="sm"
                         variant="outline"
-                        onClick={() => onAdd({ label, owner: person.id })}
+                        onClick={() => onAdd({ label, owner: person.id, variable })}
                       >
                         <Sparkles />
                         {label}

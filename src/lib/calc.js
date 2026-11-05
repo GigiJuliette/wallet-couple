@@ -172,6 +172,7 @@ export function compute(data, month = currentMonthKey()) {
   let jointTotal = 0
   let chargesTotal = 0
   let pleasureTotal = 0
+  let variableTotal = 0
 
   for (const item of items) {
     for (const id of ids) due[id] += item.monthly * (item.weights[id] || 0)
@@ -199,6 +200,7 @@ export function compute(data, month = currentMonthKey()) {
 
     if (item.kind === "pleasure") pleasureTotal += item.monthly
     else chargesTotal += item.monthly
+    if (item.kind !== "pleasure" && item.variable) variableTotal += item.monthly
   }
 
   for (const item of personal) personalTotal[item.owner] += item.monthly
@@ -330,6 +332,8 @@ export function compute(data, month = currentMonthKey()) {
     totalIncome: round2(totalIncome),
     chargesTotal: round2(chargesTotal),
     pleasureTotal: round2(pleasureTotal),
+    fixedTotal: round2(chargesTotal - variableTotal),
+    variableTotal: round2(variableTotal),
     poolTotal: round2(poolTotal),
     jointTotal: round2(jointTotal),
     directTotal: round2(poolTotal - jointTotal),
@@ -419,4 +423,9 @@ export function paymentProgress(transfers, payments, month) {
     count: ofMonth.length,
     complete: transfers.length > 0 && transfers.every((t) => byTransfer[t.id].complete),
   }
+}
+
+export function shiftMonth(key, delta) {
+  const [y, m] = key.split("-").map(Number)
+  return currentMonthKey(new Date(y, m - 1 + delta, 1))
 }
